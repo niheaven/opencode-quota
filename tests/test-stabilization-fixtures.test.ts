@@ -105,6 +105,7 @@ describe("test-stabilization-fixtures", () => {
       "tests/providers.openrouter.surfaces.test.ts",
       "tests/lib.alibaba-token-plan.test.ts",
       "tests/providers.alibaba-token-plan.test.ts",
+      "tests/providers.alibaba-token-plan-routed.test.ts",
       "tests/lib.quota-status.test.ts",
       "tests/quota-render-data.test.ts",
       "tests/tui-runtime.test.ts",

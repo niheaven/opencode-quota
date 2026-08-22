@@ -2,6 +2,10 @@ import {
   DEFAULT_ALIBABA_AUTH_CACHE_MAX_AGE_MS,
   resolveAlibabaCodingPlanAuthCached,
 } from "../lib/alibaba-auth.js";
+import {
+  DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+  resolveAlibabaTokenPlanAuthCached,
+} from "../lib/alibaba-token-plan-auth.js";
 import { resolveAnthropicAuthIdentity } from "../lib/anthropic.js";
 import { resolveChutesApiKey } from "../lib/chutes-config.js";
 import { resolveCopilotAuthIdentity } from "../lib/copilot.js";
@@ -142,7 +146,18 @@ export const PROVIDER_CACHE_POLICIES = {
     return resolved ? { credential: resolved.key } : null;
   }),
   cursor: UNCACHED,
-  "alibaba-token-plan": UNCACHED,
+  "alibaba-token-plan": resolvedCredentialPolicy("alibaba-token-plan", async () => {
+    const resolved = await resolveAlibabaTokenPlanAuthCached({
+      maxAgeMs: DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+    });
+    return resolved.state === "configured" ? { credential: resolved.config.loginTicket } : null;
+  }),
+  "alibaba-token-plan-cn": resolvedCredentialPolicy("alibaba-token-plan-cn", async () => {
+    const resolved = await resolveAlibabaTokenPlanAuthCached({
+      maxAgeMs: DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+    });
+    return resolved.state === "configured" ? { credential: resolved.config.loginTicket } : null;
+  }),
   "alibaba-coding-plan": resolvedCredentialPolicy("alibaba-coding-plan", async () => {
     const resolved = await resolveAlibabaCodingPlanAuthCached({
       maxAgeMs: DEFAULT_ALIBABA_AUTH_CACHE_MAX_AGE_MS,

@@ -194,7 +194,8 @@ Gemini CLI works only with Gemini Code Assist Standard or Enterprise (organizati
 | Provider                      | Auth/setup                                                                   | Data from      | Reports            |
 | ----------------------------- | ---------------------------------------------------------------------------- | -------------- | ------------------ |
 | Alibaba Coding Plan           | Automatic                                                                    | Local estimate | Quota              |
-| Alibaba Personal Token Plan   | [Needs setup](docs/readme/providers.md#alibaba-personal-token-plan)          | Official CLI   | Quota              |
+| Alibaba Token Plan            | [Needs setup](docs/readme/providers.md#alibaba-token-plan)                   | Remote API     | Quota              |
+| Alibaba Token Plan (CN)       | [Needs setup](docs/readme/providers.md#alibaba-token-plan)                   | Remote API     | Quota              |
 | DeepSeek                      | Automatic                                                                    | Remote API     | Balance and status |
 | Kimi Code                     | Automatic                                                                    | Remote API     | Quota              |
 | Kimi Code (CN)                | Automatic                                                                    | Remote API     | Quota              |

@@ -70,10 +70,15 @@ describe("provider-metadata", () => {
       },
       {
         id: "alibaba-token-plan",
-        autoSetup: "needs_quick_setup",
-        authentication: "local_cli_auth",
-        quota: "local_cli_report",
-        quickSetupAnchor: "alibaba-personal-token-plan",
+        autoSetup: "yes",
+        authentication: "external_api_key",
+        quota: "remote_api",
+      },
+      {
+        id: "alibaba-token-plan-cn",
+        autoSetup: "yes",
+        authentication: "external_api_key",
+        quota: "remote_api",
       },
       {
         id: "synthetic",
@@ -408,10 +413,9 @@ describe("provider-metadata", () => {
     });
     expect(getQuotaProviderShape("alibaba-token-plan")).toEqual({
       id: "alibaba-token-plan",
-      autoSetup: "needs_quick_setup",
-      authentication: "local_cli_auth",
-      quota: "local_cli_report",
-      quickSetupAnchor: "alibaba-personal-token-plan",
+      autoSetup: "yes",
+      authentication: "external_api_key",
+      quota: "remote_api",
     });
     expect(getQuotaProviderShape("alibaba-coding-plan")).not.toEqual(
       getQuotaProviderShape("alibaba-token-plan"),
@@ -482,7 +486,7 @@ describe("provider-metadata", () => {
     expect(getQuotaProviderDisplayLabel("google-agy")).toBe("Google AGY");
     expect(getQuotaProviderDisplayLabel("cursor")).toBe("Cursor");
     expect(getQuotaProviderDisplayLabel("alibaba-coding-plan")).toBe("Alibaba Coding Plan");
-    expect(getQuotaProviderDisplayLabel("alibaba-token-plan")).toBe("Alibaba Personal Token Plan");
+    expect(getQuotaProviderDisplayLabel("alibaba-token-plan")).toBe("Alibaba Token Plan");
     expect(getQuotaProviderDisplayLabel("synthetic")).toBe("Synthetic");
     expect(getQuotaProviderDisplayLabel("zai")).toBe("Z.ai");
     expect(getQuotaProviderDisplayLabel("zhipu")).toBe("Zhipu");

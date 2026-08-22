@@ -10,7 +10,7 @@ const RESOLVED_AUTH_PROVIDER_IDS = [
   "openrouter",
   "xai",
 ] as const;
-const UNCACHED_CANONICAL_PROVIDER_IDS = ["cursor", "alibaba-token-plan"] as const;
+const UNCACHED_CANONICAL_PROVIDER_IDS = ["cursor"] as const;
 
 vi.mock("../src/lib/opencode-runtime-paths.js", () => ({
   getOpencodeRuntimeDirCandidates: () => ({

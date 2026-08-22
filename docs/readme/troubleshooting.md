@@ -152,16 +152,21 @@ Run `/quota_status` and check the Alibaba auth, resolved tier, state-file path, 
 </details>
 
 <details>
-<summary><strong>Alibaba Personal Token Plan</strong></summary>
+<summary><strong>Alibaba Token Plan</strong></summary>
 
-Run `/quota_status` and check the `alibaba_token_plan` live probe. This source is separate from Alibaba Coding Plan API-key diagnostics.
+Set `ALIBABA_TOKEN_PLAN_COOKIE` to use the remote API (it takes priority); without it the provider falls back to the official CLI. Run `/quota_status` and check the `config_state`, `config_source`, and `live_fetch_code` rows when a fetch fails.
 
 | Symptom                 | Fix                                                                                                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConsoleNeedLogin`      | The `login_aliyunid_ticket` cookie is missing or expired. Re-extract it from DevTools → Network → `data/api.json` → Request Headers → Cookie.                       |
+| `(personal)` section missing | `switchAgent` is not set. Add `switchAgent` / `switch_agent` (the console agent id) or `ALIBABA_TOKEN_PLAN_SWITCH_AGENT`.                                      |
+| `(team)` section missing | `account` is empty. Add the seat account name(s) to `account` or `ALIBABA_TOKEN_PLAN_ACCOUNT`.                                                                    |
+| `LoginRequired`         | The cookie is expired — the API redirected instead of answering. Re-copy the Cookie header from DevTools → Network → any `data/api.json` → Request Headers → Cookie. |
+| Seats hidden            | The `account` filter excludes every seat. The whitelist matches `AccountName` exactly (case-sensitive); use commas under the env var or an array in the config file. |
 | CLI not detected        | Install official `bailian-cli` so `bl` is on an absolute PATH directory outside the workspace. On Windows, run this from WSL. Native `bl.exe` and `.cmd` shims are not supported. |
 | Console session expired | Run `bl auth login --console`. A Coding Plan API key cannot authenticate this provider.                                                                             |
 | Weekly row only         | The official CLI may omit the five-hour window. OpenCode Quota does not invent a missing window.                                                                    |
-| JSON export empty       | `show --json` is cache-only. This provider is uncached, so a separate CLI process reports it unavailable instead of running `bl`.                                   |
+| OpenCode config ignored | Repo-local `opencode.json` / `opencode.jsonc` is ignored. Put `ALIBABA_TOKEN_PLAN_COOKIE` in your shell or write `~/.config/opencode/opencode-quota/alibaba-token-plan.json`. |
 
 </details>
 
