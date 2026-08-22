@@ -1,4 +1,8 @@
 import { resolveAlibabaCodingPlanAuthCached } from "../lib/alibaba-auth.js";
+import {
+  DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+  resolveAlibabaTokenPlanAuthCached,
+} from "../lib/alibaba-token-plan-auth.js";
 import { resolveAnthropicAuthIdentity } from "../lib/anthropic.js";
 import {
   API_KEY_LOGIN_VENDORS,
@@ -146,7 +150,34 @@ export const PROVIDER_CACHE_POLICIES = {
   },
   kilo: apiKeyPolicy("kilo"),
   cursor: UNCACHED,
-  "alibaba-token-plan": UNCACHED,
+  "alibaba-token-plan": resolvedCredentialPolicy("alibaba-token-plan", async () => {
+    const resolved = await resolveAlibabaTokenPlanAuthCached({
+      maxAgeMs: DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+    });
+    return resolved.state === "configured"
+      ? {
+          credential: resolved.config.loginTicket,
+          qualifiers: [
+            JSON.stringify(resolved.config.account ?? []),
+            String(resolved.config.switchAgent ?? ""),
+          ],
+        }
+      : null;
+  }),
+  "alibaba-token-plan-cn": resolvedCredentialPolicy("alibaba-token-plan-cn", async () => {
+    const resolved = await resolveAlibabaTokenPlanAuthCached({
+      maxAgeMs: DEFAULT_ALIBABA_TOKEN_PLAN_AUTH_CACHE_MAX_AGE_MS,
+    });
+    return resolved.state === "configured"
+      ? {
+          credential: resolved.config.loginTicket,
+          qualifiers: [
+            JSON.stringify(resolved.config.account ?? []),
+            String(resolved.config.switchAgent ?? ""),
+          ],
+        }
+      : null;
+  }),
   "alibaba-coding-plan": resolvedCredentialPolicy("alibaba-coding-plan", async () => {
     const resolved = await resolveAlibabaCodingPlanAuthCached();
     return resolved.state === "configured"

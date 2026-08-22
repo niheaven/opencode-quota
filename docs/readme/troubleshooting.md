@@ -153,12 +153,17 @@ Check the `alibaba-coding-plan` section: the login, tier (`alibaba_coding_plan`)
 </details>
 
 <details>
-<summary><strong>Alibaba Personal Token Plan</strong></summary>
+<summary><strong>Alibaba Token Plan</strong></summary>
 
-Check the `alibaba-token-plan` section (separate from Alibaba Coding Plan).
+Check the `alibaba-token-plan` section (separate from Alibaba Coding Plan). Set `ALIBABA_TOKEN_PLAN_COOKIE` to use the remote API (it takes priority); without it the provider falls back to the official CLI. Run `/quota_status` and check the `config_state`, `config_source`, `personal_state`, and `team_state` rows when a fetch returns no quota.
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
+| `ConsoleNeedLogin`      | The `login_aliyunid_ticket` cookie is missing or expired. Re-extract it from DevTools → Network → `data/api.json` → Request Headers → Cookie.                       |
+| No personal row         | `switchAgent` is not set (`personal_state=no_switch_agent`). Add `switchAgent` / `switch_agent` (the console agent id) or `ALIBABA_TOKEN_PLAN_SWITCH_AGENT`.      |
+| No seat rows            | `account` is empty (`team_state=no_account`). Add the seat account name(s) to `account` or `ALIBABA_TOKEN_PLAN_ACCOUNT`.                                          |
+| `LoginRequired`         | The cookie is expired — the API redirected instead of answering. Re-copy the Cookie header from DevTools → Network → any `data/api.json` → Request Headers → Cookie. |
+| Seats hidden            | The `account` filter excludes every seat. The whitelist matches `AccountName` exactly (case-sensitive); use commas under the env var or an array in the config file. |
 | CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder (for example `/opt/homebrew/bin`, `~/.local/bin`, or an nvm folder). On Windows, use WSL. See [setup](providers.md#alibaba-personal-token-plan). |
 | Console session expired | Run `bl auth login --console`. A Coding Plan API key cannot sign in to this provider. |
 | No monthly row          | `bl` reported no monthly percentage, so the plan may be unlimited. Verify it in the Bailian Token Plan console. OpenCode Quota does not invent a row. |

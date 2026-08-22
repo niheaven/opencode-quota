@@ -54,8 +54,14 @@ export const QUOTA_PROVIDER_REGISTRATION_SOURCE = [
   },
   {
     id: "alibaba-token-plan",
-    label: "Alibaba Personal Token Plan",
+    label: "Alibaba Token Plan",
     runtimeIds: ["alibaba-token-plan"],
+    synonyms: [],
+  },
+  {
+    id: "alibaba-token-plan-cn",
+    label: "Alibaba Token Plan (CN)",
+    runtimeIds: ["alibaba-token-plan-cn"],
     synonyms: [],
   },
   {

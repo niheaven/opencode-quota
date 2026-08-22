@@ -24,7 +24,9 @@ const GROUP_BRANDS: Readonly<Record<string, readonly string[]>> = {
   kilo: ["Kilo Gateway"],
   cursor: ["Cursor"],
   "alibaba-coding-plan": ["Alibaba Coding Plan"],
-  "alibaba-token-plan": ["Alibaba Personal Token Plan"],
+  // "Alibaba Personal Token Plan": the CLI backend's own group name, so it is not shown as an account.
+  "alibaba-token-plan": ["Alibaba Token Plan", "Alibaba Personal Token Plan"],
+  "alibaba-token-plan-cn": ["Alibaba Token Plan (CN)", "Alibaba Token Plan"],
   synthetic: ["Synthetic"],
   chutes: ["Chutes"],
   "google-gemini-cli": ["Gemini CLI"],

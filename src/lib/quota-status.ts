@@ -39,6 +39,10 @@ import {
 import { formatShare, formatTokens } from "../view/format.js";
 import { COUNT_LABELS } from "./accounting-format.js";
 import { ERROR_MESSAGES as ALIBABA_TOKEN_PLAN_ERRORS } from "./alibaba-token-plan.js";
+import {
+  ALIBABA_TOKEN_PLAN_PERSONAL_URLS,
+  ALIBABA_TOKEN_PLAN_QUOTA_URLS,
+} from "./alibaba-token-plan-endpoints.js";
 import { API_KEY_LOGIN_VENDORS, API_KEY_VENDORS } from "./api-key-resolver.js";
 import { COPILOT_AUTH_KEYS } from "./copilot.js";
 import { CURSOR_CANONICAL_PLUGIN_PACKAGE } from "./cursor-detection.js";
@@ -141,6 +145,7 @@ export const KNOWN_FILE_NAMES: ReadonlySet<string> = new Set([
   "copilot-quota-token.json",
   "mimo.json",
   "alibaba-coding-plan-local-quota.json",
+  "alibaba-token-plan.json",
   "modelsdev-pricing.runtime.min.json",
   "modelsdev-pricing.refresh-state.json",
   "snapshot-v6.json",
@@ -1020,6 +1025,24 @@ const STATE_HEALTH = ["missing", "healthy", "malformed", "version_mismatch"] as 
 const CONSOLE_AUTH_STATES = ["none", "configured", "expired", "invalid"] as const;
 
 /**
+ * The cookie route's own details (`providers/alibaba-token-plan-routed.ts`): the config it read,
+ * the two console APIs it calls, and what each source returned. `personal_state` and
+ * `team_state` are its fixed words for a source that answered with nothing ("no_data") or was
+ * skipped, so a route with no rows says why instead of showing an empty section.
+ */
+const ALIBABA_TOKEN_PLAN_COOKIE_DETAILS: DebugRules = {
+  config_state: oneOf("none", "configured", "invalid"),
+  config_source: keySource,
+  config_error: present,
+  config_checked_paths: pathList,
+  api_endpoint: oneOf("international", "china"),
+  api_base_url: oneOf(...Object.values(ALIBABA_TOKEN_PLAN_QUOTA_URLS)),
+  personal_api_base_url: oneOf(...Object.values(ALIBABA_TOKEN_PLAN_PERSONAL_URLS)),
+  personal_state: oneOf("ok", "no_data", "no_switch_agent", "backoff", "failed"),
+  team_state: oneOf("ok", "no_data", "no_account", "backoff", "failed"),
+};
+
+/**
  * The debug details each provider's section may show besides its setup and API-key details,
  * by key; every other one is counted.
  */
@@ -1117,7 +1140,10 @@ const DEBUG_DETAILS: Readonly<Partial<Record<CanonicalQuotaProviderId, DebugRule
     platform: oneOf(process.platform),
     windows: listOf(["monthly"]),
     failure_kind: oneOf(...Object.keys(ALIBABA_TOKEN_PLAN_ERRORS)),
+    // The cookie route: what the CLI route above cannot report (see the routed provider).
+    ...ALIBABA_TOKEN_PLAN_COOKIE_DETAILS,
   },
+  "alibaba-token-plan-cn": { ...ALIBABA_TOKEN_PLAN_COOKIE_DETAILS },
   synthetic: { api_key_diagnostics: KEY_SUMMARY },
   chutes: { api_key_diagnostics: KEY_SUMMARY },
   "google-gemini-cli": GOOGLE_DETAILS,
