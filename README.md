@@ -186,8 +186,10 @@ Gemini CLI quota support is deprecated for new installs. Existing v4 configurati
 
 | Provider                 | Auth/setup                                          | Data from      | Reports            |
 | ------------------------ | --------------------------------------------------- | -------------- | ------------------ |
-| Alibaba Coding Plan      | Automatic                                           | Local estimate | Quota              |
-| DeepSeek                 | Automatic                                           | Remote API     | Balance and status |
+| Alibaba Coding Plan      | Automatic                                               | Local estimate | Quota              |
+| Alibaba Token Plan       | [Needs setup](docs/readme/providers.md#alibaba-token-plan) | Remote API  | Quota              |
+| Alibaba Token Plan (CN)  | [Needs setup](docs/readme/providers.md#alibaba-token-plan) | Remote API  | Quota              |
+| DeepSeek                 | Automatic                                               | Remote API     | Balance and status |
 | Kimi Code                | Automatic                                           | Remote API     | Quota              |
 | MiniMax Token Plan       | Automatic                                           | Remote API     | Quota              |
 | MiniMax Token Plan (CN)  | Automatic                                           | Remote API     | Quota              |

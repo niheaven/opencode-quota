@@ -67,10 +67,12 @@ Business placement describes vendor plan availability. Except for configured Cop
 <details open>
 <summary><strong>Personal</strong></summary>
 
-| Provider                 | Auth/setup                  | Data from      | Reports            |
-| ------------------------ | --------------------------- | -------------- | ------------------ |
-| Alibaba Coding Plan      | Automatic                   | Local estimate | Quota              |
-| DeepSeek                 | Automatic                   | Remote API     | Balance and status |
+| Provider                 | Auth/setup                                              | Data from      | Reports            |
+| ------------------------ | ------------------------------------------------------- | -------------- | ------------------ |
+| Alibaba Coding Plan      | Automatic                                               | Local estimate | Quota              |
+| Alibaba Token Plan       | [Needs setup](#alibaba-token-plan)                      | Remote API     | Quota              |
+| Alibaba Token Plan (CN)  | [Needs setup](#alibaba-token-plan)                      | Remote API     | Quota              |
+| DeepSeek                 | Automatic                                               | Remote API     | Balance and status |
 | Kimi Code                | Automatic                   | Remote API     | Quota              |
 | MiniMax Token Plan       | Automatic                   | Remote API     | Quota              |
 | MiniMax Token Plan (CN)  | Automatic                   | Remote API     | Quota              |
@@ -577,6 +579,43 @@ The confirmed OpenCode provider IDs are `xiaomi`, `xiaomi-token-plan-cn`, `xiaom
 Plan name/code only enrich the display. An explicitly expired plan does not appear active, and `currentPeriodEnd` is not treated as a quota reset. The three fixed dashboard requests are independent, so available quota or balance data still appears when another request fails.
 
 Per-API-key costs remain unsupported until Xiaomi exposes endpoint and schema evidence for that accounting.
+
+<a id="alibaba-token-plan"></a>
+
+### Alibaba Token Plan
+
+Alibaba Token Plan reads the [`GetSubscriptionSeatDetails`](https://bailian.console.aliyun.com) endpoint using a single sign-in cookie plus a per-request `sec_token` body field. Each seat becomes one entry keyed by `AccountName`; the cycle (`CycleTotalValue` / `CycleSurplusValue` / `CycleEndTime`) is a monthly credit pool with `kind: "count", unit: "credit"` basis facts. Optionally filter the seats shown by passing `account: ["..."]` (comma-separated under `ALIBABA_TOKEN_PLAN_ACCOUNT`).
+
+Use exactly one trusted credential source. The environment variables have priority:
+
+```bash
+export ALIBABA_TOKEN_PLAN_SEC_TOKEN='...'
+export ALIBABA_TOKEN_PLAN_LOGIN_TICKET='login_aliyunid_ticket=...'
+# Optional: limit which seats appear
+export ALIBABA_TOKEN_PLAN_ACCOUNT='team-lead,team-member'
+```
+
+Or create the trusted user/global OpenCode runtime file `opencode-quota/alibaba-token-plan.json` (commonly `~/.config/opencode/opencode-quota/alibaba-token-plan.json`):
+
+```json
+{
+  "secToken": "...",
+  "loginTicket": "login_aliyunid_ticket=...",
+  "account": ["team-lead"]
+}
+```
+
+The runtime accepts snake_case aliases (`sec_token`, `login_ticket`, `login_aliyunid_ticket`). The config file is preferred over env vars so that 30-second auth cache reloads on every fetch without restarting OpenCode.
+
+To copy the values manually:
+
+1. Sign in at `bailian.console.aliyun.com`.
+2. Open the browser Developer Tools, then **Network**.
+3. Filter `Fetch/XHR` and select the `data/api.json` quota request.
+4. Copy its **Request Headers → Cookie** (`login_aliyunid_ticket=...`) and **Payload → `sec_token`** into the env vars or config file above.
+5. Optional: type the account name(s) you want into `account` to hide teammates.
+
+`successResponse: false` (the only signal the API uses for failure) propagates as an attempted error with the raw `code` (for example `ConsoleNeedLogin`, `ParamsInvalid`, `PostonlyOrTokenError`) in `live_fetch_code`. Seats with `Status !== "NORMAL"` or `EquityType !== "CREDITS"` are filtered out. The international and China endpoints currently share the same URL; international API discovery is tracked separately.
 
 <a id="ollama-cloud"></a>
 

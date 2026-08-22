@@ -166,6 +166,21 @@ Run `/quota_status` and check the Alibaba auth, resolved tier, state-file path, 
 </details>
 
 <details>
+<summary><strong>Alibaba Token Plan</strong></summary>
+
+The provider reads the `GetSubscriptionSeatDetails` endpoint using a `Cookie: login_aliyunid_ticket=...` header plus a `sec_token` form body field. Run `/quota_status` and check the `config_state`, `config_source`, and `live_fetch_code` rows when the fetch fails.
+
+| Symptom                 | Fix                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ConsoleNeedLogin`      | The `login_aliyunid_ticket` cookie is missing or expired. Re-extract it from DevTools → Network → `data/api.json` → Request Headers → Cookie. The value starts with `login_aliyunid_ticket=` and is short-lived (hours).                                                                                                       |
+| `ParamsInvalid`         | The `product` form field is missing. The plugin sets `product=ModelStudio` automatically — this code only appears if a future API requires a different product.                                                                                                                                                                          |
+| `PostonlyOrTokenError`  | The `sec_token` is missing or expired. Re-extract it from DevTools → Network → `data/api.json` → Payload (or Form Data) → `sec_token`. This token can outlive the ticket (the user's case: 1-year `Max-Age`) but is rotated when you sign out.                                                        |
+| Seats hidden            | The `account` filter excludes every seat. The whitelist matches `AccountName` exactly (case-sensitive); use commas under the env var or an array in the config file.                                                                                                       |
+| OpenCode config ignored | Repo-local `opencode.json` / `opencode.jsonc` is ignored. Put `ALIBABA_TOKEN_PLAN_SEC_TOKEN` / `ALIBABA_TOKEN_PLAN_LOGIN_TICKET` in your shell or write `~/.config/opencode/opencode-quota/alibaba-token-plan.json`.                                                          |
+
+</details>
+
+<details>
 <summary><strong>MiniMax, Kimi, Chutes AI, Synthetic, Z.ai, Zhipu, NanoGPT, and DeepSeek</strong></summary>
 
 These providers use trusted env vars, trusted user/global OpenCode config, or native OpenCode auth. Run `/quota_status` and check the provider-specific API-key diagnostics.

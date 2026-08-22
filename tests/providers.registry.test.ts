@@ -13,6 +13,8 @@ const EXPECTED_PROVIDER_ORDER = [
   "cursor",
   "qwen-code",
   "alibaba-coding-plan",
+  "alibaba-token-plan",
+  "alibaba-token-plan-cn",
   "synthetic",
   "chutes",
   "google-antigravity",

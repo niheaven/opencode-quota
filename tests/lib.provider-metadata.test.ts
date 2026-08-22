@@ -75,6 +75,18 @@ describe("provider-metadata", () => {
         quota: "local_estimation",
       },
       {
+        id: "alibaba-token-plan",
+        autoSetup: "yes",
+        authentication: "external_api_key",
+        quota: "remote_api",
+      },
+      {
+        id: "alibaba-token-plan-cn",
+        autoSetup: "yes",
+        authentication: "external_api_key",
+        quota: "remote_api",
+      },
+      {
         id: "synthetic",
         autoSetup: "yes",
         authentication: "opencode_auth_api_key",

@@ -11,6 +11,7 @@ import {
   QUOTA_PROVIDER_REGISTRATION_SOURCE,
 } from "../lib/provider-registration.js";
 import { alibabaCodingPlanProvider } from "./alibaba-coding-plan.js";
+import { alibabaTokenPlanCnProvider, alibabaTokenPlanProvider } from "./alibaba-token-plan.js";
 import { anthropicProvider } from "./anthropic.js";
 import { PROVIDER_CACHE_POLICIES } from "./cache-policies.js";
 import { chutesProvider } from "./chutes.js";
@@ -67,6 +68,8 @@ const PROVIDERS_BY_ID = {
   opencode: opencodeZenProvider,
   "ollama-cloud": ollamaCloudProvider,
   "quota-providers": quotaProvidersProvider,
+  "alibaba-token-plan": alibabaTokenPlanProvider,
+  "alibaba-token-plan-cn": alibabaTokenPlanCnProvider,
 } satisfies Record<CanonicalQuotaProviderId, QuotaProvider>;
 
 export function getProviders(): QuotaProvider[] {
