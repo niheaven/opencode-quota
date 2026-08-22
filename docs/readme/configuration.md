@@ -133,7 +133,7 @@ Rules:
 - If any request cannot be priced, request counts stay visible and the budget percentage is reported unavailable.
 - Credentials resolve from `apiKeyEnv`, trusted global `provider.<providerId>.options.apiKey`, then API-key logins saved in OpenCode 2 (`opencode.db`).
 - Definitions run automatically with `enabledProviders: "auto"`. A manual list must include `quota-providers` and every built-in provider you still want.
-- To tune maintained estimates, use the reserved `alibaba-coding-plan` ID and its window shape. Do not add a duplicate normal provider block.
+- To tune maintained estimates, use the reserved `alibaba-coding-plan` ID and its window shape. Do not add a duplicate normal provider block. Alibaba Token Plan and Alibaba Token Plan (CN) use the reserved `alibaba-token-plan` and `alibaba-token-plan-cn` IDs and are not local-estimate tuning targets.
 - Not accepted: project secrets, scripts, methods, custom headers, templates, executable mappings, regular expressions, JSONPath, and automatic endpoint discovery.
 - A custom model provider still needs its normal OpenCode `provider` block: that block tells OpenCode how to use the model, and `quotaProviders` tells OpenCode Quota how to measure it.
 - `/quota_status` shows the exact state path and safe credential source, never URLs, keys, headers, response bodies, counter contents, or raw errors.

@@ -11,7 +11,10 @@ import {
   QUOTA_PROVIDER_REGISTRATION_SOURCE,
 } from "../lib/provider-registration.js";
 import { alibabaCodingPlanProvider } from "./alibaba-coding-plan.js";
-import { alibabaTokenPlanProvider } from "./alibaba-token-plan.js";
+import {
+  alibabaTokenPlanCnProvider,
+  alibabaTokenPlanRoutedProvider,
+} from "./alibaba-token-plan-routed.js";
 import { anthropicProvider } from "./anthropic.js";
 import { PROVIDER_CACHE_POLICIES } from "./cache-policies.js";
 import { chutesProvider } from "./chutes.js";
@@ -47,7 +50,8 @@ const PROVIDERS_BY_ID = {
   kilo: kiloProvider,
   cursor: cursorProvider,
   "alibaba-coding-plan": alibabaCodingPlanProvider,
-  "alibaba-token-plan": alibabaTokenPlanProvider,
+  "alibaba-token-plan": alibabaTokenPlanRoutedProvider,
+  "alibaba-token-plan-cn": alibabaTokenPlanCnProvider,
   synthetic: syntheticProvider,
   chutes: chutesProvider,
   "google-gemini-cli": googleGeminiCliProvider,

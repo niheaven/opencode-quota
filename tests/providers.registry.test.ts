@@ -13,6 +13,7 @@ const EXPECTED_PROVIDER_ORDER = [
   "cursor",
   "alibaba-coding-plan",
   "alibaba-token-plan",
+  "alibaba-token-plan-cn",
   "synthetic",
   "chutes",
   "google-gemini-cli",

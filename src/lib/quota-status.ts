@@ -598,6 +598,14 @@ function supportedProviderPricingRow(params: {
     };
   }
 
+  if (id === "alibaba-token-plan-cn") {
+    return {
+      id,
+      pricing: "no",
+      notes: "official Alibaba Cloud Token Plan (CN) quota (not token-priced)",
+    };
+  }
+
   if (id === "cursor") {
     return {
       id,
@@ -917,6 +925,18 @@ export async function buildQuotaStatusReportDocument(
   });
   if (alibabaTokenPlanLiveProbeSection) {
     sections.push(alibabaTokenPlanLiveProbeSection);
+  }
+
+  const alibabaTokenPlanCnLiveProbeSection = createCompactLiveProbeOnlySection({
+    id: "alibaba_token_plan_cn",
+    title: "alibaba_token_plan_cn:",
+    providerId: "alibaba-token-plan-cn",
+    probes: params.providerLiveProbes,
+    availability: params.providerAvailability,
+    homeDir,
+  });
+  if (alibabaTokenPlanCnLiveProbeSection) {
+    sections.push(alibabaTokenPlanCnLiveProbeSection);
   }
 
   for (const section of [

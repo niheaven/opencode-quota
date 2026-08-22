@@ -65,7 +65,8 @@ These tables show which plans a vendor sells. Except for Copilot organization/en
 | Provider                      | Auth/setup                                                          | Data from      | Reports            |
 | ----------------------------- | ------------------------------------------------------------------- | -------------- | ------------------ |
 | Alibaba Coding Plan           | Automatic                                                           | Local estimate | Quota              |
-| Alibaba Personal Token Plan   | [Needs setup](#alibaba-personal-token-plan)                         | Official CLI   | Quota              |
+| Alibaba Token Plan            | [Needs setup](#alibaba-token-plan)                                  | Remote API     | Quota              |
+| Alibaba Token Plan (CN)       | [Needs setup](#alibaba-token-plan)                                  | Remote API     | Quota              |
 | DeepSeek                      | Automatic                                                           | Remote API     | Balance and status |
 | Kimi Code                     | Automatic                                                           | Remote API     | Quota              |
 | Kimi Code (CN)                | Automatic                                                           | Remote API     | Quota              |
@@ -116,7 +117,7 @@ It asks how the provider works, previews the exact global config change, and ask
 - With `enabledProviders: "auto"`, definitions run automatically. A manual list must include `quota-providers` plus every built-in provider you still want.
 - A custom model provider still needs its normal OpenCode provider/model config. `/connect` → **Other** stores its credential, not its model setup.
 - OpenRouter is built in. A custom OpenRouter definition only helps if you need a different endpoint or label.
-- Alibaba Personal Token Plan uses the reserved `alibaba-token-plan` ID and stays a separate official-CLI provider; it is not a local-estimate tuning target.
+- Alibaba Token Plan and Alibaba Token Plan (CN) use the reserved `alibaba-token-plan` and `alibaba-token-plan-cn` IDs and stay separate from `alibaba-coding-plan`; they are not local-estimate tuning targets.
 
 See [Configuration](configuration.md#custom-providers) for a complete example and the other rules (pricing, state files, what is not allowed).
 
@@ -414,6 +415,8 @@ Cursor estimates the current billing cycle from your local OpenCode history:
 
 ### Alibaba Personal Token Plan
 
+*Fallback CLI route for the international `alibaba-token-plan` provider.*
+
 This is separate from Alibaba Coding Plan. Install and sign in to Alibaba Cloud Model Studio's official CLI yourself:
 
 ```bash
@@ -424,7 +427,7 @@ bl auth login --console
 - OpenCode Quota runs only `bl usage token-plan --output json`. It never installs `bl`, opens a login, reads console cookies, or runs a custom command.
 - On macOS and Linux, `bl` must be in an absolute folder on the `PATH` (the OpenCode service's inside OpenCode, your shell's in the terminal). Relative entries are ignored, and so is anything inside the project folder, including a `bl` that links into it. Your home folder is not a project, so `~/.local/bin` and nvm folders work.
 - On Windows, use WSL. Native `bl.exe` and `.cmd` shims are not supported in this release.
-- Team plans, China-only `alibaba-token-plan-cn` runtimes, and cookie-based console scraping are not supported.
+- Team plans, a China-only `alibaba-token-plan-cn` CLI variant, and cookie-based console scraping are not supported for this CLI route. The [remote API route](#alibaba-token-plan) is the primary path; OpenCode Quota uses this CLI route automatically only for `alibaba-token-plan` when no login ticket is configured.
 - After switching the CLI's console account, restart OpenCode or wait for the next live check.
 - With a manual provider list, include `alibaba-token-plan` in `enabledProviders`.
 
@@ -531,6 +534,46 @@ To copy the cookie:
 - Provider ids: `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams`, and `xiaomi-token-plan-sgp`. With a manual provider list, use `xiaomi`.
 - Plan name and code only label the display. An expired plan is not shown as active, and `currentPeriodEnd` is not a quota reset.
 - The three dashboard requests are independent, so other rows still appear if one fails. Per-API-key costs are not supported yet.
+
+<a id="alibaba-token-plan"></a>
+
+### Alibaba Token Plan
+
+Alibaba Token Plan reads your plan quota with one credential — the sign-in login ticket (`login_aliyunid_ticket`) — and shows a section for each plan you have:
+
+- **Personal** — your monthly usage percentage, shown as an `(personal)` section. Enabled by `switchAgent`.
+- **Team** — one row per seat with its monthly credit pool, shown as a `(team)` section. Enabled by `account`.
+
+Set the credential via the environment (priority) or the trusted user/global runtime file `opencode-quota/alibaba-token-plan.json` (commonly `~/.config/opencode/opencode-quota/alibaba-token-plan.json`):
+
+```bash
+export ALIBABA_TOKEN_PLAN_COOKIE='login_aliyunid_ticket=...; other=...'
+# Required for the Personal row: the console agent id
+export ALIBABA_TOKEN_PLAN_SWITCH_AGENT='15608122'
+# Enable the team source: the seat account name(s) to track
+export ALIBABA_TOKEN_PLAN_ACCOUNT='team-lead,team-member'
+```
+
+```json
+{
+  "cookie": "login_aliyunid_ticket=...; other=...",
+  "switchAgent": 15608122,
+  "account": ["team-lead"]
+}
+```
+
+`cookie` accepts either the full Cookie header or just the bare `login_aliyunid_ticket` value (`loginTicket` / `login_ticket` are aliases); `switchAgent` / `switch_agent` are aliases. Set `account` to show team seats and `switchAgent` to show your personal usage — a plan without its key is not shown. Environment variables take priority over the config file. With no login ticket configured, the international `alibaba-token-plan` provider falls back to the official CLI route (see [Alibaba Personal Token Plan](#alibaba-personal-token-plan)); `alibaba-token-plan-cn` has no CLI fallback.
+
+To copy the values manually:
+
+1. Sign in at `bailian.console.aliyun.com`.
+2. Open the browser Developer Tools, then **Network**.
+3. Filter `Fetch/XHR` and select any `data/api.json` request.
+4. Copy its **Request Headers → Cookie** value (or just the `login_aliyunid_ticket` value) into `cookie`. Only the ticket is sent on the wire; other cookies in the pasted header are ignored.
+5. For `switchAgent`, open the personal page (`.../cn-beijing/subscription/token-plan/personal`) and read the number at `params` → `Data.cornerstoneParam.switchAgent` on that request's payload.
+6. Optional: type the account name(s) you want into `account` to hide teammates.
+
+`switchAgent` is account-specific and stable — set it once; re-copy it only if the console shows a different agent. Expired or missing credentials surface as an error with a raw code (for example `BailianGateway.Login.NotLogined`, `ConsoleNeedLogin`) in `live_fetch_code`.
 
 <a id="ollama-cloud"></a>
 
