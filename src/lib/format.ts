@@ -324,6 +324,22 @@ export function formatQuotaRows(params: {
       return;
     }
 
+    const valueAndTimeWidth =
+      separator.length +
+      Math.max(value.length, 6) +
+      separator.length +
+      Math.max(timeStr.length, timeCol);
+    if (
+      nameAndValue.length + separator.length + timeStr.length > maxWidth &&
+      valueAndTimeWidth >= maxWidth
+    ) {
+      // The value is too wide to share a line with its name, so stack them instead of cutting both.
+      lines.push(name.slice(0, maxWidth));
+      lines.push(...wrapDisplayText(value, maxWidth).map((line) => padLeft(line, maxWidth)));
+      if (timeStr) lines.push(padLeft(timeStr, maxWidth));
+      return;
+    }
+
     lines.push(
       buildClassicValueLine({
         name,

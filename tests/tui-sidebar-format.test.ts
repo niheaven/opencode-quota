@@ -67,6 +67,34 @@ describe("buildSidebarQuotaPanelLines", () => {
     expect(rendered).toContain("gpt-5");
   });
 
+  it.each([
+    "allWindows",
+    "singleWindow",
+  ] as const)("stacks a value row too wide for its label instead of cutting it (%s)", (formatStyle) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-30T08:00:00.000Z"));
+    const lines = buildSidebarQuotaPanelLines({
+      config: { formatStyle, percentDisplayMode: "remaining" },
+      data: {
+        entries: [
+          {
+            kind: "value",
+            name: "Copilot",
+            group: "Copilot (business)",
+            label: "Plan:",
+            value: "business | usage needs billing token",
+            resetTimeIso: "2026-10-01T00:00:00.000Z",
+          },
+        ],
+        errors: [],
+      },
+    });
+
+    expect(lines.every((line) => line.length <= TUI_SIDEBAR_MAX_WIDTH)).toBe(true);
+    expect(lines.join(" ").replace(/\s+/gu, " ")).toContain("business | usage needs billing token");
+    expect(lines.some((line) => /^(Copilot|Plan)\b/u.test(line.trim()))).toBe(true);
+  });
+
   it("wraps long error rows within the sidebar width and keeps bar rows unchanged", () => {
     const message = "Could not parse OpenCode Console budgets/org response";
     const data = {
@@ -164,9 +192,10 @@ describe("buildSidebarQuotaPanelLines", () => {
     });
 
     expect(lines).toEqual(expected);
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(4);
     expect(lines[0]).toBe("[Copilot] (business)");
-    expect(lines[1]).toContain("9 used");
+    expect(lines[1]).toBe("Usage:");
+    expect(lines[2].trim()).toBe("9 used | 2026-01 | org=acme-corp");
     expect(lines.join("\n")).not.toContain("→ ");
     expect(lines.every((line) => line.length <= TUI_SIDEBAR_MAX_WIDTH)).toBe(true);
   });

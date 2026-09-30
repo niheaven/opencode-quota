@@ -218,6 +218,13 @@ export function formatQuotaRowsGrouped(params: {
           1,
           barWidth - separator.length - valueWidth - separator.length - timeWidth,
         );
+        if (leftMax + separator.length + valueWidth + separator.length + timeWidth > maxWidth) {
+          // The value is too wide to share a line with its label, so stack them instead of cutting both.
+          lines.push(leftText.slice(0, maxWidth));
+          lines.push(...wrapDisplayText(value, maxWidth).map((line) => padLeft(line, maxWidth)));
+          if (timeStr) lines.push(padLeft(timeStr, maxWidth));
+          continue;
+        }
         lines.push(
           (
             padRight(leftText, leftMax) +
