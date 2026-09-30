@@ -1,30 +1,17 @@
 # Contributing to opencode-quota
 
-Thanks for contributing. This repo has strict local-only behavior and regression guardrails, so please follow this workflow.
+Thanks for contributing! Please read this before you open an issue or PR.
 
-## Issue-First (Preferred)
+## Issues first
 
-- Prefer opening an issue before starting features, bug fixes, refactors, or behavioral changes.
-- If you already have a fix ready, opening an issue and PR together is fine.
-- When an issue exists, link it in the PR description using `Fixes #<issue>` or `Refs #<issue>`.
-- If no issue exists, include a short rationale/scope summary in the PR description.
+- Open an issue before a feature, fix, refactor, or behavior change. Opening the issue and PR together is fine.
+- Link it in the PR with `Fixes #<issue>` or `Refs #<issue>`. No issue? Explain the reason and scope in the PR.
+- Use an issue form (bug, feature, or provider request). Write a short, specific title; the form adds the label, so skip `[bug]`-style prefixes.
+- Very short or mostly empty issues get the `needs info` label. Adding the details removes it. `needs info` issues close after 21 days without activity; nothing else auto-closes.
 
-## Issue and PR Templates
+## Setup
 
-- GitHub Issue Forms are enabled and blank issues are disabled.
-- Use `.github/ISSUE_TEMPLATE/bug_report.yml` for bug reports.
-- Use `.github/ISSUE_TEMPLATE/feature_request.yml` for feature requests.
-- Use `.github/ISSUE_TEMPLATE/provider_request.yml` to ask for a new provider.
-- Write a short, specific title. The template adds the label, so no title prefix is needed.
-- Issues with a very short title or a mostly empty form get the `needs info` label and one bot comment. Editing the issue to add the details removes the label.
-- Only `needs info` issues go stale: marked after 14 days without activity and closed 7 days later. Other bugs and feature requests never auto-close.
-- Pull requests use `.github/pull_request_template.md` and should include tested OpenCode version details.
-
-## Development Setup
-
-- The published package runtime supports Node.js `^22.13.0 || >=23.4.0` (matches `package.json` engines; `node:sqlite` needs no flag from those versions).
-- Repository development uses pnpm v11, which requires Node.js `>=22` for the pnpm CLI.
-- Enable the pinned package manager and install dependencies with:
+Node.js `^22.13.0 || >=23.4.0` and pnpm 11:
 
 ```sh
 corepack enable
@@ -32,131 +19,71 @@ corepack prepare pnpm@11.0.0 --activate
 pnpm install
 ```
 
-`pnpm install` runs `prepare`, which installs Lefthook hooks.
+`pnpm install` also installs the Git hooks: pre-commit formats staged files with Biome; pre-push runs `pnpm verify`.
 
-## Local Quality Gates
+## Checks
 
-The Lefthook pre-commit hook runs Biome only on staged supported files and re-stages formatting and safe fixes. It does not run typecheck or tests.
+Run `pnpm verify` before opening a PR. It runs lint and formatting, typecheck, build, all tests, the four-surface test, and package checks. CI runs the same command, then installs the packed package on Node 22 and 24 as a smoke test.
 
-The Lefthook pre-push hook runs exactly:
+For quick iteration: `pnpm run test:watch`.
 
-- `pnpm verify`
+## Rules the code must keep
 
-Run the canonical repository gate before opening a PR:
+- **No AI calls.** Never send a request to an AI model to produce anything the plugin shows (quota rows, toasts, command output); it would spend the user's tokens. Calling a provider's quota or billing API is fine.
+- **OpenCode 2 only.** No OpenCode 1 code, APIs, or tables.
+- **Server vs. TUI.** The server plugin (`src/plugin.ts`) computes all text and registers the `quota_status` tool, the slash commands, and the `slkiser.opencode-quota` RPC. The TUI plugin (`src/tui-v2.tsx`) only draws what the RPC returns and never imports provider or credential code. Web and Desktop get slash commands only; OpenCode 2 has no plugin UI hooks there.
+- **One command path.** Every slash command, the `quota_status` tool, and the RPC `command` method go through `buildQuotaDialogCommandOutput()`.
+- **Credentials.** Read OpenCode logins only through `ctx.integration` in `src/lib/opencode-auth.ts`. The only exception is the terminal command (`src/lib/cli-show.ts`), which uses `src/lib/opencode-auth-sqlite.ts`; the plugins must never reach that file.
+- **Money.** Show amounts with the provider's ISO code through the shared formatter (e.g. `USD 12.50`). No symbols, conversions, or adding up different currencies.
+- Keep these boundary tests passing and up to date: `tests/plugin.command-handled-boundary.test.ts`, `tests/tui-dist-import-graph.test.ts`, `tests/plugin.question-hook.test.ts`, `tests/quota-provider-boundary.test.ts`.
 
-```sh
-pnpm verify
-```
+## Provider changes
 
-It checks Biome linting and formatting, the pinned TypeScript toolchain, repository history/privacy, typecheck, build, the full test suite, focused four-surface parity, and package contents—in that order.
+**Built-in providers** are considered only when:
 
-Use `pnpm run test:watch` for local iteration. Use `pnpm run build:check` when you need the build plus package dry-run check.
+- the provider is on [models.dev](https://models.dev/),
+- at least two independent users asked for it (your own request, repeat comments, and requests from the provider's own company don't count),
+- it has a documented API (no login cookies or website scraping), and
+- the PR links that evidence and explains why a custom provider isn't enough.
 
-## CI Checks (Automated)
+Even then, it needs a reasonable maintenance cost.
 
-PR and `main` pushes trigger `.github/workflows/ci.yml` (`CI` workflow):
+**Pick the right path:**
 
-- Job: `pnpm-quality` on Node `24.x`
-- Steps: frozen install, `pnpm verify`, then one exact npm artifact pack and upload
-- Job: `runtime-smoke` on Node `22.x` and `24.x`
-- Runtime smoke installs that exact packed artifact as a consumer and verifies the default/server imports, TUI export payload, CLI help, and `engines.node ^22.13.0 || >=23.4.0`
+| You want to… | Use |
+| --- | --- |
+| Use an OpenAI-compatible model service OpenCode doesn't include | an OpenCode custom provider |
+| Track quota for a provider OpenCode already exposes (request estimates or one fixed quota endpoint) | an OpenCode Quota custom provider (`provider add`); its `providerId` must match OpenCode's |
+| Anything the custom path can't do, and the policy above is met | a built-in provider |
 
-Release workflow `.github/workflows/publish-npm.yml` first checks the release tag, SHA, and package version, then runs `pnpm verify` on Node 24. After that, it packs one exact artifact, smoke-tests that artifact on Node 22 and 24, verifies it again before provenance publishing, and backfills the release version. Run `pnpm run release:check` on Node 24 when the release environment is available; it adds the release-version assertion after the canonical gate.
+**Building one:** for API-key or token providers, start from `contributing/provider-template/` (see its README), replace every example name, and add tests for every auth source. Use the README setup label that matches reality: `Automatic` or `Needs setup`.
 
-## Branch Protection (Maintainers)
+**Every row** carries `AccountingMetadata`. Pick `resultType` by what the number means (`quota`, `rate_limit`, `usage`, `spend`, `budget`, `balance`, `status`), not by what's easiest to draw, and name the real source in `authority`. `user_configured` is only for a basis fact such as a user-set limit, never a row.
 
-Recommended settings for `main`:
+Rich providers (more than a percentage) also:
 
-- Require a pull request before merging.
-- Require branches to be up to date before merging.
-- Require status checks from workflow `CI` for `pnpm-quality` and every `runtime-smoke` matrix entry.
-- Select checks exactly as GitHub displays them in repository settings.
-- Typical names look like `pnpm-quality`, `runtime-smoke (22.x)`, `runtime-smoke (24.x)` or `CI / ...` variants.
-- Block direct pushes to `main` for non-admin users.
+- send numbers as typed `quantity` rows or percentage `basis` facts, and booleans as `boolean` rows; never pre-formatted money strings;
+- set `semantic` with an explicit `primary` or `supplementary` prominence;
+- keep `used`, `limit`, and `remaining` literal;
+- keep labels short: the concept only, no values, units, or reset text;
+- format through the shared accounting formatter.
 
-## Repo Guardrails
+A simple percentage-only provider may keep the plain percent row, with accurate `AccountingMetadata`.
 
-- Never invoke an LLM/model API to compute toast/report output. Everything must remain local and deterministic.
-- Rich accounting currency quantities must preserve the provider's uppercase ISO code and render through the shared formatter (for example, `USD 12.50`), never a provider-formatted currency string, bare symbol, decorative glyph, conversion, or cross-currency sum.
-- OpenCode Quota supports only OpenCode 2. Do not add OpenCode 1 code paths, plugin APIs, or database tables.
-- The server plugin (`src/plugin.ts`) registers the `quota_status` tool, the slash commands, and the `slkiser.opencode-quota` RPC, and computes the text of every surface. OpenCode 2 gives plugins no Web or Desktop UI hooks, so Web and Desktop get slash commands but no toasts or panels. Commands never call a model.
-- The TUI plugin (`src/tui-v2.tsx`) only renders: toasts, the Sidebar panel, the compact line and prompt bar below the prompt, the Home footer line, and report popups. It gets every text through the RPC and imports no provider or credential module (`tests/tui-dist-import-graph.test.ts`, `tests/plugin.command-handled-boundary.test.ts`).
-- Slash commands (`/quota`, `/quota_status`, `/quota_announcements`, `/pricing_refresh`, `/tokens_*`), the `quota_status` tool, and the RPC `command` method must route through `buildQuotaDialogCommandOutput()`; do not duplicate command-output logic in `src/plugin.ts` or `src/tui-v2.tsx`.
-- Read OpenCode credentials only through `ctx.integration`, inside `src/lib/opencode-auth.ts`, never from `auth.json` or the `credential` table. The one exception: the terminal command (`src/lib/cli-show.ts`) binds the read-only reader in `src/lib/opencode-auth-sqlite.ts`, the only code that queries the `credential` table; `src/plugin.ts` and `src/tui-v2.tsx` must never reach it (`tests/tui-dist-import-graph.test.ts`). Every reader call still names its integration ids.
-- Keep `tests/plugin.command-handled-boundary.test.ts` aligned with these invariants.
+## Fixes
 
-Additional boundary tests to keep healthy when touching plugin/provider logic:
+Make the smallest safe fix for the root cause. Match current OpenCode behavior instead of adding extra hook layers. Test against the current released OpenCode version and name it in the PR.
 
-- `tests/plugin.question-hook.test.ts`
-- `tests/quota-provider-boundary.test.ts`
+## Before-and-after screenshots (required)
 
-## Provider Changes
+Every PR that changes what users see must include before-and-after screenshots taken with the same config, model, theme, and window size, with credentials, account identifiers, and private paths hidden. For quota changes, report each surface: Web, TUI sidebar, toast, and the compact line under the message input (plus the prompt bar or command dialog if relevant). Say which ones you didn't test. Tests don't replace screenshots, and screenshots don't replace tests. No visible change? Write `Not applicable` and why.
 
-### Built-in Provider Policy
+## PR checklist
 
-A built-in provider addition is eligible for review only when:
-
-- The provider is listed on [models.dev](https://models.dev/).
-- The request shows demand or recommendations from at least two independent users.
-- The PR links that evidence and explains why the custom-provider feature is not enough.
-
-A contributor's own request and repeated comments from the same person do not count as independent demand. Eligibility does not guarantee acceptance: the provider must also expose a stable accounting source and have a reasonable long-term maintenance cost.
-
-### Choose the Right Path
-
-- **OpenCode custom provider:** Use this to connect an OpenAI-compatible model service that OpenCode does not include automatically.
-- **OpenCode Quota custom provider:** Use `provider add` for local request estimates or one supported fixed quota endpoint. Its `providerId` must exactly match a provider ID exposed by OpenCode at runtime. It does not create the OpenCode provider or support discovery, fan-out requests, or arbitrary provider logic.
-- **Built-in provider:** Consider maintained code only after the provider meets the policy above and the custom-provider path cannot support its required behavior.
-
-### Built-in Implementation
-
-Keep README setup wording tied to real behavior.
-
-- For API-key/token providers that reuse existing OpenCode auth, trusted global config, or approved environment variables, start from `contributing/provider-template/`.
-- Copy the template files to the target paths listed in `contributing/provider-template/README.md`.
-- Replace the example names, IDs, environment variables, and config keys before coding.
-- Add tests for every supported auth source; do not leave copied template tests skipped, todo-only, or unresolved.
-- Use the current README setup label—`Automatic` or `Needs setup`—that matches the real user workflow.
-- In the PR checklist, state whether you started from the provider template; if not, explain why it does not apply.
-
-### Accounting Result Contract
-
-Every provider row must carry `AccountingMetadata`. Its closed `resultType` is the actual accounting meaning—`quota`, `rate_limit`, `usage`, `spend`, `budget`, `balance`, or `status`—not the shape that is easiest to render. Row-level and basis-fact authorities must also name the real origin. `user_configured` is allowed only on a basis fact, such as a configured budget limit; it is not a row-level JSON v2 authority.
-
-For a rich provider:
-
-- Emit numeric financial/count facts as typed `quantity` rows or percentage `basis` facts, and booleans as typed `boolean` rows. Do not preformat currency in a legacy `value` or financial `right` string.
-- Provide a complete `semantic` object with an explicit `primary` or `supplementary` prominence. Do not infer prominence from order.
-- Keep basis `used`, `limit`, and `remaining` values literal. A display mode may change the percentage direction but never rename one fact as another.
-- Keep named metrics short and single-line. A named label contains the concept only—never a value, unit, reset string, or layout punctuation.
-- Use the shared accounting formatter for human output and JSON v2 flattening. `barValue` is removed and is not an extension point.
-
-A simple percentage-only provider can keep the legacy percent row shape without `semantic` or `basis`; it still needs accurate `AccountingMetadata`. Do not add structured semantics unless the source can support their meaning and authority.
-
-## Quality Bar for Fixes
-
-- Prefer the smallest safe fix that addresses the root cause.
-- Align behavior with current OpenCode production behavior rather than adding extra hook/output mutation layers.
-- Preserve existing invariants and update/add boundary tests when behavior contracts change.
-- We appreciate PRs that verify the fix against the current production released OpenCode version and note the tested version in the PR.
-
-## Before-and-after evidence
-
-Changes to visible UI or human-readable output require matching before-and-after screenshots of the affected surfaces. Capture both versions with the same configuration, model/provider, theme, and window size, and redact credentials, account identifiers, private paths, and other sensitive information.
-
-Quota-related changes must report a result for Web output, the TUI sidebar, toast, and the compact line below the message input. Identify unchanged or untested surfaces explicitly. Include the prompt bar or command dialog when relevant.
-
-Formatter tests do not count as screenshot evidence. Screenshots do not replace tests, and formatter tests do not replace checking the real client.
-
-If there is no visible effect, write `Not applicable` and explain briefly.
-
-## Pull Request Checklist
-
-- Linked issue (`Fixes #...` or `Refs #...`) when available, or included a short no-issue rationale in the PR.
-- `pnpm verify` passes.
-- Verified behavior against the current production released OpenCode version, and included the tested version in the PR notes.
-- Included matching before-and-after screenshots for visible changes and recorded the required surface checks, or explained why this does not apply.
-- Updated docs when user-facing commands/config/workflow changed (usually `README.md`; update this file when contributor workflow changes).
-- For built-in provider additions, linked the models.dev entry, evidence from at least two independent users, and an explanation of why the custom-provider feature is insufficient.
-- For new API-key/token providers, started from `contributing/provider-template/` or explained why the template does not apply.
-- For provider setup/auth wording changes, checked `contributing/provider-template/` and verified the current README setup label against implementation and tests.
+- [ ] Linked issue, or a short reason there is none
+- [ ] `pnpm verify` passes
+- [ ] Tested on the current released OpenCode; version noted
+- [ ] Before-and-after screenshots and surface results, or `Not applicable`
+- [ ] Docs updated if commands, config, or workflow changed (usually `README.md`)
+- [ ] New built-in provider: models.dev link, two independent requests, why custom isn't enough
+- [ ] New API-key/token provider: started from the provider template, or explained why not

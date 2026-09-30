@@ -22,31 +22,46 @@ describe("contribution guidance", () => {
     const quality = headingIndex(prTemplate, "Quality Checklist");
     expect(openCodeValidation).toBeLessThan(evidence);
     expect(evidence).toBeLessThan(quality);
-    expect(headingIndex(contributing, "Before-and-after evidence")).toBeLessThan(
-      headingIndex(contributing, "Pull Request Checklist"),
+    expect(headingIndex(contributing, "Before-and-after screenshots (required)")).toBeLessThan(
+      headingIndex(contributing, "PR checklist"),
     );
   });
 
   it("requires matching screenshots, four-surface reports, redaction, and justified Not applicable", () => {
-    for (const document of [prTemplate, contributing]) {
-      const evidence = readMarkdownSection(document, /^Before-and-after evidence$/);
-      expect(evidence).toContain("matching before-and-after screenshots");
-      expect(evidence).toContain("Web output");
-      expect(evidence).toContain("TUI sidebar");
-      expect(evidence).toContain("toast");
-      expect(evidence).toContain("compact line below the message input");
-      expect(evidence).toContain("prompt bar or command dialog when relevant");
-      expect(evidence).toContain("unchanged or untested");
-      expect(evidence).toMatch(
-        /redact credentials, account identifiers, private paths, and other sensitive information/i,
-      );
-      expect(evidence).toContain("`Not applicable`");
-      expect(evidence).toContain("explain briefly");
-      expect(evidence).toContain("Formatter tests do not count as screenshot evidence");
-    }
+    const templateEvidence = readMarkdownSection(prTemplate, /^Before-and-after evidence$/);
+    expect(templateEvidence).toContain("matching before-and-after screenshots");
+    expect(templateEvidence).toContain("Web output");
+    expect(templateEvidence).toContain("TUI sidebar");
+    expect(templateEvidence).toContain("toast");
+    expect(templateEvidence).toContain("compact line below the message input");
+    expect(templateEvidence).toContain("prompt bar or command dialog when relevant");
+    expect(templateEvidence).toContain("unchanged or untested");
+    expect(templateEvidence).toMatch(
+      /redact credentials, account identifiers, private paths, and other sensitive information/i,
+    );
+    expect(templateEvidence).toContain("`Not applicable`");
+    expect(templateEvidence).toContain("explain briefly");
+    expect(templateEvidence).toContain("Formatter tests do not count as screenshot evidence");
 
-    expect(readMarkdownSection(contributing, /^Pull Request Checklist$/)).toContain(
-      "Included matching before-and-after screenshots for visible changes and recorded the required surface checks, or explained why this does not apply.",
+    const contributingEvidence = readMarkdownSection(
+      contributing,
+      /^Before-and-after screenshots \(required\)$/,
+    );
+    expect(contributingEvidence).toContain("must include before-and-after screenshots");
+    expect(contributingEvidence).toContain("same config, model, theme, and window size");
+    expect(contributingEvidence).toContain(
+      "Web, TUI sidebar, toast, and the compact line under the message input",
+    );
+    expect(contributingEvidence).toContain("prompt bar or command dialog if relevant");
+    expect(contributingEvidence).toContain("Say which ones you didn't test");
+    expect(contributingEvidence).toContain(
+      "credentials, account identifiers, and private paths hidden",
+    );
+    expect(contributingEvidence).toContain("`Not applicable`");
+    expect(contributingEvidence).toContain("Tests don't replace screenshots");
+
+    expect(readMarkdownSection(contributing, /^PR checklist$/)).toContain(
+      "Before-and-after screenshots and surface results, or `Not applicable`",
     );
   });
 
@@ -57,7 +72,8 @@ describe("contribution guidance", () => {
     expect(prTemplate).not.toContain("I ran `pnpm test`");
     expect(prTemplate).toContain("Current production released OpenCode version tested:");
     expect(prTemplate).toContain("This change is focused and avoids unrelated behavior changes");
-    expect(contributing).toContain("`pnpm verify` passes.");
-    expect(contributing).toContain("current production released OpenCode version");
+    expect(contributing).toContain("`pnpm verify` passes");
+    expect(contributing).toContain("Tested on the current released OpenCode");
+    expect(contributing).toContain("smallest safe fix");
   });
 });
