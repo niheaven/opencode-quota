@@ -830,9 +830,11 @@ describe("v4 Phase 5 cross-surface release evidence", () => {
           .filter((provider) => "fetchedAt" in provider)
           .map((provider) => provider.fetchedAt),
       );
+      // fetchedAt is floored to whole seconds (up to 1s off) and the gauge reads Date.now()
+      // after metricObservedAt, so slow runs can drift up to 2s.
       expect(
         Math.abs(cacheAgeObservations[0].value - (metricObservedAt / 1000 - oldestFetchedAt)),
-      ).toBeLessThanOrEqual(1);
+      ).toBeLessThanOrEqual(2);
     }
     const telemetryOutput = JSON.stringify(observations);
     assertPhase5CanariesRedacted(telemetryOutput);
