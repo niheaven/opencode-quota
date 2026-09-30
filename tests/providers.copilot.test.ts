@@ -375,7 +375,7 @@ describe("copilot provider", () => {
         name: "Copilot",
         group: "Copilot (business)",
         label: "Plan:",
-        value: "business | quota details unavailable",
+        value: "business | usage needs billing token",
         resetTimeIso: "2026-02-01T00:00:00.000Z",
       },
     ]);

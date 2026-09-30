@@ -148,8 +148,8 @@ function planEntries(result: CopilotPlanResult): QuotaToastEntry[] {
       group: getCopilotGroup(result.mode, result.plan),
       label: "Plan:",
       value: result.plan
-        ? `${result.plan} | quota details unavailable`
-        : "Quota details unavailable",
+        ? `${result.plan} | usage needs billing token`
+        : "Usage needs billing token",
       resetTimeIso: result.resetTimeIso,
     },
   ];

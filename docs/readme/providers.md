@@ -237,6 +237,8 @@ If something below does not work, see [Provider fixes](troubleshooting.md#provid
 
 **Personal quota** works automatically from your OpenCode Copilot login. GitHub.com uses `api.github.com`; a GHE.com login uses the `enterpriseUrl` saved with that login and calls `api.<enterprise-host>`.
 
+If Quota shows `<plan> | usage needs billing token`, GitHub reported your plan but no usage for your login. This is normal for Business and Enterprise seats (usage comes from the organization's pool), and it does not mean you are out of credits. Add the token below to see real numbers.
+
 **Organization and enterprise billing** need a separate token with billing access. Create `copilot-quota-token.json` in the OpenCode config folder shown by `opencode debug paths`. Example for a personal Copilot Max plan:
 
 ```json
