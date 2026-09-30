@@ -401,6 +401,143 @@ describe("GitHub Copilot AI Credit accounting", () => {
     });
   });
 
+  it("renders token-based over-limit usage as a quota row using the reported percentage", async () => {
+    authMocks.readAuthFile.mockResolvedValue({
+      "github-copilot": { type: "oauth", access: "oauth-token" },
+    });
+    // Representative of a Copilot Business token-billing response after the
+    // included pool is exhausted: entitlement 3000, quota_remaining -739.5,
+    // credits_used 3739, percent_remaining 0.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(
+          copilotUser({
+            copilot_plan: "business",
+            quota_snapshots: {
+              premium_interactions: {
+                entitlement: 3000,
+                remaining: -740,
+                quota_remaining: -739.5,
+                percent_remaining: 0,
+                credits_used: 3739,
+                unlimited: false,
+              },
+            },
+          }),
+        ),
+      ) as any,
+    );
+
+    const { queryCopilotQuota, formatCopilotQuota } = await import("../src/lib/copilot.js");
+    const result = await queryCopilotQuota();
+    expect(result).toEqual({
+      success: true,
+      mode: "user_quota",
+      unit: "premium_interactions",
+      used: 3739,
+      authority: "provider_reported",
+      total: 3000,
+      percentRemaining: 0,
+      plan: "business",
+      resetTimeIso: "2026-02-01T00:00:00.000Z",
+    });
+    expect(result && result.success ? formatCopilotQuota(result) : null).toBe(
+      "Copilot Premium Interactions 3739/3000",
+    );
+  });
+
+  it("falls back to derived over-limit usage without a usable credits_used", async () => {
+    authMocks.readAuthFile.mockResolvedValue({
+      "github-copilot": { type: "oauth", access: "oauth-token" },
+    });
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+
+    for (const creditsUsed of [undefined, -1, "3739"]) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          json(
+            copilotUser({
+              copilot_plan: "business",
+              quota_snapshots: {
+                premium_interactions: {
+                  entitlement: 3000,
+                  remaining: -740,
+                  quota_remaining: -739.5,
+                  percent_remaining: 0,
+                  credits_used: creditsUsed,
+                  unlimited: false,
+                },
+              },
+            }),
+          ),
+        ) as any,
+      );
+      const result = await queryCopilotQuota();
+      expect(result).toMatchObject({
+        success: true,
+        mode: "user_quota",
+        used: 3739.5,
+        authority: "locally_derived",
+        total: 3000,
+        percentRemaining: 0,
+      });
+    }
+  });
+
+  it("does not trust a negative remaining without token billing or a valid reported percentage", async () => {
+    authMocks.readAuthFile.mockResolvedValue({
+      "github-copilot": { type: "oauth", access: "oauth-token" },
+    });
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+
+    for (const { tokenBasedBilling, snapshot, expectedMode } of [
+      {
+        tokenBasedBilling: false,
+        snapshot: {
+          entitlement: 3000,
+          remaining: -740,
+          quota_remaining: -739.5,
+          percent_remaining: 0,
+          unlimited: false,
+        },
+        expectedMode: "error",
+      },
+      {
+        tokenBasedBilling: true,
+        snapshot: {
+          entitlement: 3000,
+          remaining: -740,
+          quota_remaining: -739.5,
+          percent_remaining: 140,
+          unlimited: false,
+        },
+        expectedMode: "user_plan",
+      },
+    ] as const) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          json(
+            copilotUser({
+              token_based_billing: tokenBasedBilling,
+              quota_snapshots: { premium_interactions: snapshot },
+            }),
+          ),
+        ) as any,
+      );
+      const result = await queryCopilotQuota();
+      if (expectedMode === "error") {
+        expect(result && !result.success ? result.error : "").toContain(
+          "did not include a usable quota snapshot",
+        );
+      } else {
+        expect(result).toMatchObject({ success: true, mode: "user_plan" });
+      }
+    }
+  });
+
   it.each([
     "http://acme.ghe.com",
     "https://user@acme.ghe.com",

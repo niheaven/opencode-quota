@@ -120,6 +120,38 @@ describe("copilot provider", () => {
     });
   });
 
+  it("renders token-based over-limit usage as a quota row with a clamped percentage", async () => {
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+    (queryCopilotQuota as any).mockResolvedValueOnce({
+      success: true,
+      mode: "user_quota",
+      unit: "premium_interactions",
+      used: 3739,
+      total: 3000,
+      percentRemaining: 0,
+      authority: "provider_reported",
+      plan: "business",
+      resetTimeIso: "2026-02-01T00:00:00.000Z",
+    });
+
+    const out = await copilotProvider.fetch({} as any);
+    expectAttemptedWithNoErrors(out);
+    expect(visibleEntries(out.entries, "copilot")).toEqual([
+      {
+        name: "Copilot Premium Interactions",
+        group: "Copilot (business)",
+        label: "Quota:",
+        right: "3,739/3,000",
+        percentRemaining: 0,
+        resetTimeIso: "2026-02-01T00:00:00.000Z",
+      },
+    ]);
+    expect(out.entries[0]?.accounting).toMatchObject({
+      resultType: "quota",
+      authority: "provider_reported",
+    });
+  });
+
   it("uses the OAuth GHE Copilot plan in the credential presentation without changing billing scope", async () => {
     const { getCopilotQuotaAuthDiagnostics, queryCopilotQuota } = await import(
       "../src/lib/copilot.js"
