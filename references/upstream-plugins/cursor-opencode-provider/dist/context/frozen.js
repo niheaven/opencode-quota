@@ -1,6 +1,7 @@
 import { buildDynamicRequestContext, buildRequestContext, materializeRequestContext, requestContextBase, } from "./build.js";
 import { clearContextEpoch, endContextEpoch, resetContextEpochsForTests } from "./epoch.js";
 import { clearOverlayHold, resetOverlayHoldsForTests, transferOverlayHold, } from "./overlay.js";
+import { clearSkillCatalogAdmission, resetSkillCatalogAdmissionsForTests, transferSkillCatalogAdmission, } from "./dynamic-catalog.js";
 import { trace } from "../debug.js";
 import { encodeMessage } from "../protocol/messages.js";
 /**
@@ -44,6 +45,7 @@ function remember(conversationId, context) {
         byConversationId.delete(oldest);
         materializedByConversationId.delete(oldest);
         clearOverlayHold(oldest);
+        clearSkillCatalogAdmission(oldest);
     }
 }
 /** Frozen stable RequestContext base for this conversation, if any. */
@@ -67,6 +69,7 @@ export function clearFrozenRequestContext(conversationId) {
     byConversationId.delete(conversationId);
     materializedByConversationId.delete(conversationId);
     clearOverlayHold(conversationId);
+    clearSkillCatalogAdmission(conversationId);
     clearContextEpoch(conversationId);
 }
 /**
@@ -89,6 +92,7 @@ export function transferFrozenRequestContext(previousConversationId, nextConvers
     // also drops epoch state for each id.
     endContextEpoch(previousConversationId, nextConversationId);
     transferOverlayHold(previousConversationId, nextConversationId);
+    transferSkillCatalogAdmission(previousConversationId, nextConversationId);
     byConversationId.delete(previousConversationId);
     materializedByConversationId.delete(previousConversationId);
     byConversationId.delete(nextConversationId);
@@ -110,6 +114,7 @@ export function resetFrozenRequestContextsForTests() {
     materializedByConversationId.clear();
     buildsByConversationId.clear();
     resetOverlayHoldsForTests();
+    resetSkillCatalogAdmissionsForTests();
     resetContextEpochsForTests();
 }
 function sameBytes(a, b) {

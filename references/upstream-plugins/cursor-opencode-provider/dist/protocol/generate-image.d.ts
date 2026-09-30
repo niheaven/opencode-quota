@@ -30,8 +30,8 @@ export type DecodedGenerateImageQuery = {
     referenceImagePaths: string[];
     toolCallId: string;
 };
-/** Cursor names the target file; its extension is the only mime signal sent. */
-export declare function imageMimeForPath(filePath: string): string;
+/** Prefer encoded bytes: Cursor can send JPEG data with a .png target name. */
+export declare function imageMimeForPath(filePath: string, data?: Uint8Array): string;
 /** Decode a `generate_image_request_query` body, or undefined when unusable. */
 export declare function decodeGenerateImageQuery(queryBytes: Uint8Array): DecodedGenerateImageQuery | undefined;
 export type ImageWriteRoots = {

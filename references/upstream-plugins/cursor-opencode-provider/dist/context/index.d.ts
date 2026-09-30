@@ -1,4 +1,5 @@
 export { buildDynamicRequestContext, buildRequestContext, DYNAMIC_REQUEST_CONTEXT_KEYS, materializeRequestContext, requestContextBase, type BuildRequestContextInput, } from "./build.js";
+export { buildDynamicCatalogRoutingInstruction, buildSkillCatalogChangeReminder, buildSkillCatalogNudge, takeSkillCatalogChangeReminder, listAdvertisedMcpServers, skillNameFromAgentSkill, type AgentSkillLike, } from "./dynamic-catalog.js";
 export { clearFrozenRequestContext, getFrozenRequestContext, getOrBuildRequestContext, MAX_FROZEN_REQUEST_CONTEXTS, resetFrozenRequestContextsForTests, setFrozenRequestContext, transferFrozenRequestContext, } from "./frozen.js";
 export { MAX_OVERLAY_HOLDS, holdCapabilityOverlay, resetOverlayHoldsForTests, } from "./overlay.js";
 export { admitContextEpoch, appendMidConversationMessage, clearContextEpoch, endContextEpoch, getContextEpoch, MAX_CONTEXT_EPOCHS, resetContextEpochsForTests, type AdmitContextEpochInput, type AdmitContextEpochResult, type ContextEpoch, type ContextSourceSnapshot, } from "./epoch.js";

@@ -91,6 +91,12 @@ export declare const CURSOR_MODEL_COSTS: {
         readonly cache_read: 0.2;
         readonly cache_write: 2.5;
     };
+    readonly "claude-sonnet-5-5": {
+        readonly input: 2;
+        readonly output: 10;
+        readonly cache_read: 0.2;
+        readonly cache_write: 2.5;
+    };
     readonly "composer-2.5": {
         readonly input: 0.5;
         readonly output: 2.5;
@@ -140,6 +146,16 @@ export declare const CURSOR_MODEL_COSTS: {
         readonly input: 1.4;
         readonly output: 4.4;
         readonly cache_read: 0.26;
+    };
+    readonly "glm-5.3": {
+        readonly input: 1.4;
+        readonly output: 4.4;
+        readonly cache_read: 0.26;
+    };
+    readonly "glm-5.3-flash": {
+        readonly input: 0.15;
+        readonly output: 0.5;
+        readonly cache_read: 0.029;
     };
     readonly "gpt-5-mini": {
         readonly input: 0.25;
@@ -335,6 +351,10 @@ export declare const CURSOR_MODEL_CONTEXTS: {
         readonly maxContext: 200000;
         readonly maxContextForMaxMode: 1000000;
     };
+    readonly "claude-sonnet-5-5": {
+        readonly maxContext: 200000;
+        readonly maxContextForMaxMode: 1000000;
+    };
     readonly "composer-2.5": {
         readonly maxContext: 200000;
     };
@@ -368,6 +388,12 @@ export declare const CURSOR_MODEL_CONTEXTS: {
     };
     readonly "glm-5.2": {
         readonly maxContext: 200000;
+    };
+    readonly "glm-5.3": {
+        readonly maxContext: 1000000;
+    };
+    readonly "glm-5.3-flash": {
+        readonly maxContext: 1000000;
     };
     readonly "gpt-5-mini": {
         readonly maxContext: 272000;
@@ -469,6 +495,9 @@ export declare const CURSOR_MODEL_CAPABILITIES: {
     readonly "claude-sonnet-5": {
         readonly supportsImages: true;
     };
+    readonly "claude-sonnet-5-5": {
+        readonly supportsImages: true;
+    };
     readonly "composer-2.5": {
         readonly supportsImages: true;
     };
@@ -495,6 +524,12 @@ export declare const CURSOR_MODEL_CAPABILITIES: {
     };
     readonly "glm-5.2": {
         readonly supportsImages: false;
+    };
+    readonly "glm-5.3": {
+        readonly supportsImages: false;
+    };
+    readonly "glm-5.3-flash": {
+        readonly supportsImages: true;
     };
     readonly "gpt-5-mini": {
         readonly supportsImages: true;

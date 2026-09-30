@@ -78,6 +78,13 @@ export function holdCapabilityOverlay(conversationId, live) {
     }
     return toWire(remember(conversationId, next));
 }
+/**
+ * Epoch-held skills with their OpenCode ids. The wire shape drops `id`
+ * (`AgentSkill` has no name field), but the host `skill` tool needs it.
+ */
+export function getHeldOverlaySkills(conversationId) {
+    return structuredClone(byConversationId.get(conversationId)?.skills ?? []);
+}
 export function clearOverlayHold(conversationId) {
     byConversationId.delete(conversationId);
 }

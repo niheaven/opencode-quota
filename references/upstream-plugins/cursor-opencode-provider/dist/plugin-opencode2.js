@@ -8,11 +8,13 @@ import { fetchOpenCodeWebSearchText, parseExaWebSearchResults, } from "./web-too
 import { captureCursorShellResult, cursorShellEnvForCommand, prepareCursorShellArgs, releaseCursorShellEnv, sanitizeRegisteredCursorShellOutput, } from "./shell-timeout.js";
 import { applyCursorProviderInventory, CURSOR_INTEGRATION_ID } from "./opencode2/catalog.js";
 import { applyCursorIntegration, resolveCursorAccessToken } from "./opencode2/integration.js";
+import { exposeDirectMcpTools, rememberDirectMcpNamespaces } from "./opencode2/mcp-direct.js";
 import { registerTodoTools } from "./opencode2/todo-tools.js";
 import { OPENCODE_2_TOOL_DIALECT } from "./protocol/tools.js";
 import { clearSessionTodos } from "./todo-store.js";
 import { markCompactionSession } from "./compaction-marker.js";
-import { markSessionDirectory } from "./session-directory.js";
+import { getSessionDirectory, markSessionDirectory } from "./session-directory.js";
+import { trace } from "./debug.js";
 import { cancelPlanExecutionKickoff, createPlanExecutionKickoffText, setPlanExecutionKickoff, } from "./plan-execution-kickoff.js";
 import { cancelHostAgentModeSwitch, setHostAgentModeSwitch, } from "./host-agent-mode.js";
 import { clearActiveCursorMode, getActiveCursorMode, normalizeSwitchModeId, setActiveCursorMode, } from "./protocol/switch-mode.js";
@@ -214,8 +216,8 @@ const plugin = {
                 ...(token ? { accessToken: token } : {}),
                 // Static fallback only. This hook fires once per model/package, not
                 // per session, and 2.0 runs one daemon across many projects — the
-                // real per-request directory comes from `x-opencode-directory` and
-                // the session.context hook below via `getSessionDirectory`.
+                // real per-request directory comes from `x-opencode-directory`
+                // (set on `session.model.request`) and the session-directory mark.
                 workspaceRoot,
                 cacheDir,
                 ...event.options,
@@ -250,12 +252,26 @@ const plugin = {
                 });
             }));
         }
+        // Namespaces whose tools belong on the direct catalog. Filled by the MCP
+        // transform (config is not written) and read when tool transforms replay,
+        // including after a later MCP discovery reload.
+        const directMcpNamespaces = new Set();
+        if (ctx.mcp) {
+            await track(ctx.mcp.transform((editor) => {
+                rememberDirectMcpNamespaces(directMcpNamespaces, editor.list());
+            }));
+        }
         await track(ctx.tool.transform((draft) => {
             // OpenCode 2 dropped host todowrite/todoread. Off by default
             // (`CURSOR_OPENCODE2_TODOS=1`/`true` force-enables). When on, register
             // them as direct catalog tools (`codemode: false` + output schema) if
             // the host does not already own those names. When off, register none.
             registerTodoTools(draft);
+            // MCP tools default into Code Mode. Move every server that did not
+            // explicitly opt in onto the direct catalog so this provider can
+            // advertise them to Cursor (issue #29 still routes via CallDynamicTool).
+            // See `opencode2/mcp-direct.ts`.
+            exposeDirectMcpTools(draft, directMcpNamespaces);
         }));
         // ── Shell timeout wrapper ────────────────────────────────
         await track(ctx.tool.hook("execute.before", (event) => {
@@ -328,13 +344,12 @@ const plugin = {
         }
         const rememberSessionDirectory = async (sessionID) => {
             try {
-                const info = (await ctx.session.get({ sessionID }));
-                // OpenCode 2.0 stable exposes a flat `directory`; older shapes nest it
-                // under `location.directory`. Prefer the flat field when both exist.
-                markSessionDirectory(sessionID, info.directory ?? info.location?.directory);
+                const info = await ctx.session.get({ sessionID });
+                markSessionDirectory(sessionID, info.location.directory);
             }
-            catch {
+            catch (error) {
                 // Best effort — falls back to the static workspaceRoot above.
+                trace(`session directory: session.get failed sessionID=${sessionID}: ${String(error)}`);
             }
         };
         await track(ctx.session.hook("context", async (event) => {
@@ -357,6 +372,31 @@ const plugin = {
             }
             await rememberSessionDirectory(event.sessionID);
         }));
+        // The session mark lives in module state, and OpenCode re-evaluates a local
+        // plugin's module graph per Location, so the copy running the model may not
+        // hold it. The header travels with the request (AI SDK
+        // `callOptions.headers` → `resolveSessionWorkspaceRoot`) and never reaches
+        // Cursor. Only a successful lookup updates the mark; on failure keep the
+        // last known session directory ahead of this Location's static root.
+        // Scoped by the host to this provider: other providers' requests never
+        // reach the callback, so the header cannot leak to their endpoints.
+        await track(ctx.session.hook("model.request", async (event) => {
+            const current = await ctx.session
+                .get({ sessionID: event.sessionID })
+                .then((info) => info.location.directory)
+                .catch((error) => {
+                trace(`model.request: session.get failed sessionID=${event.sessionID}: ${String(error)}`);
+                return undefined;
+            });
+            markSessionDirectory(event.sessionID, current);
+            const directory = current ?? getSessionDirectory(event.sessionID) ?? ctx.location?.directory;
+            if (!directory)
+                return;
+            event.headers = {
+                ...event.headers,
+                "x-opencode-directory": encodeURIComponent(directory),
+            };
+        }, { providerID: CURSOR_PROVIDER_ID }));
         await track(ctx.session.hook("compaction", async (event) => {
             markCompactionAndOptions(event, true);
             await rememberSessionDirectory(event.sessionID);

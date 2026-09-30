@@ -17,8 +17,9 @@ export declare function fetchRemoteInstruction(url: string, timeoutMs?: number):
 export declare function loadMergedConfig(workspaceRoot: string): Promise<OpencodeJson>;
 /**
  * Collect OpenCode instruction files.
+ * `preloadedConfig` reuses a merged config already loaded on this Run.
  */
-export declare function collectRules(workspaceRoot: string): Promise<{
+export declare function collectRules(workspaceRoot: string, preloadedConfig?: OpencodeJson): Promise<{
     rules: CollectedRule[];
     config: OpencodeJson;
     worktree: string;

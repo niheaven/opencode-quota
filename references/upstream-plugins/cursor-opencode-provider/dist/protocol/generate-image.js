@@ -32,8 +32,20 @@ const IMAGE_MIME_BY_EXTENSION = {
     ".gif": "image/gif",
     ".webp": "image/webp",
 };
-/** Cursor names the target file; its extension is the only mime signal sent. */
-export function imageMimeForPath(filePath) {
+/** Prefer encoded bytes: Cursor can send JPEG data with a .png target name. */
+export function imageMimeForPath(filePath, data) {
+    if (data) {
+        const matches = (signature, offset = 0) => signature.every((byte, index) => data[offset + index] === byte);
+        if (matches([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+            return "image/png";
+        if (matches([0xff, 0xd8, 0xff]))
+            return "image/jpeg";
+        if (matches([0x47, 0x49, 0x46, 0x38]) && (data[4] === 0x37 || data[4] === 0x39) && data[5] === 0x61) {
+            return "image/gif";
+        }
+        if (matches([0x52, 0x49, 0x46, 0x46]) && matches([0x57, 0x45, 0x42, 0x50], 8))
+            return "image/webp";
+    }
     const dot = path.basename(filePath).lastIndexOf(".");
     if (dot <= 0)
         return "image/png";

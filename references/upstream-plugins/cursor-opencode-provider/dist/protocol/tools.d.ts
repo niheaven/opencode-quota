@@ -12,9 +12,12 @@ export type OpencodeToolDef = {
 export type HostFilePathKey = "path" | "filePath";
 /** Host shell tool id. OpenCode 1.x uses `bash`; 2.0 uses `shell`. */
 export type HostShellTool = "bash" | "shell";
+/** OpenCode 1.x skill params use `name`; OpenCode 2.0 uses `id`. */
+export type HostSkillArgKey = "name" | "id";
 export type HostToolDialect = {
     filePathKey: HostFilePathKey;
     shellTool: HostShellTool;
+    skillArgKey: HostSkillArgKey;
 };
 export declare const OPENCODE_1_TOOL_DIALECT: HostToolDialect;
 export declare const OPENCODE_2_TOOL_DIALECT: HostToolDialect;
@@ -23,6 +26,7 @@ export declare function opencodePathArg(args: Record<string, unknown> | undefine
 /**
  * Infer the host tool dialect from advertised AI SDK schemas.
  * OpenCode 2.0 read/edit/write require `path` and rename bash → `shell`.
+ * Skill: OpenCode 1.x requires `name`; OpenCode 2.0 requires `id`.
  */
 export declare function hostToolDialectFromTools(tools: readonly {
     name?: string;

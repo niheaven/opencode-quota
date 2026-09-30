@@ -178,12 +178,13 @@ export async function loadMergedConfig(workspaceRoot) {
 }
 /**
  * Collect OpenCode instruction files.
+ * `preloadedConfig` reuses a merged config already loaded on this Run.
  */
-export async function collectRules(workspaceRoot) {
+export async function collectRules(workspaceRoot, preloadedConfig) {
     const worktree = await findGitWorktree(workspaceRoot);
     const rules = [];
     const seen = new Set();
-    const config = await loadMergedConfig(workspaceRoot);
+    const config = preloadedConfig ?? await loadMergedConfig(workspaceRoot);
     const add = async (file) => {
         if (!file)
             return;

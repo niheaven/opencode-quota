@@ -25,7 +25,12 @@ export const MAX_STAGED_IMAGE_BYTES = 50 * 1024 * 1024;
 export const STAGED_IMAGE_TTL_MS = 10 * 60_000;
 /** Bounds memory if a turn generates several images and none are committed. */
 const MAX_PENDING = 8;
-const pending = new Map();
+// Some hosts load the model and the image-save subpath in separate module
+// graphs. Keep the one-use handles in the process registry so both graphs see
+// the same staged bytes. The UUID handle remains the only tool input.
+const PENDING_IMAGES = Symbol.for("cursor-opencode-provider.pending-images");
+const globals = globalThis;
+const pending = globals[PENDING_IMAGES] ??= new Map();
 export class StagedImageTooLargeError extends Error {
     constructor(bytes) {
         super(`Generated image is ${bytes} bytes, above the ${MAX_STAGED_IMAGE_BYTES} byte limit`);

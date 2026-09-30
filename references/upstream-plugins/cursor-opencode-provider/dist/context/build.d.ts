@@ -1,10 +1,16 @@
 import { type OpencodeToolDef } from "../protocol/tools.js";
+import { type OpencodeJson } from "./rules.js";
 export type BuildRequestContextInput = {
     workspaceRoot: string;
     tools?: OpencodeToolDef[];
     providerIdentifier?: string;
     /** When set, skills/subagents/plugins are epoch-held for this conversation. */
     conversationId?: string;
+    /**
+     * Preloaded merged `opencode.json` from the same Run (e.g. for interaction
+     * guidance MCP server ids). Skips a second `loadMergedConfig` disk read.
+     */
+    mergedConfig?: OpencodeJson;
 };
 export declare const DYNAMIC_REQUEST_CONTEXT_KEYS: readonly ["tools", "agent_skills", "custom_subagents", "mcp_file_system_options", "mcp_meta_tool_options", "web_search_enabled", "web_fetch_enabled", "agent_skills_info_complete", "custom_subagents_info_complete", "mcp_file_system_info_complete", "mcp_info_complete", "hooks_additional_context"];
 export type DynamicRequestContextKey = typeof DYNAMIC_REQUEST_CONTEXT_KEYS[number];

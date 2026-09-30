@@ -55,4 +55,4 @@ export declare function resolveContainedImagePath(target: string, allowedRoots: 
  */
 export declare function executeCursorImageSave(args: {
     image_id?: unknown;
-}, ctx: ImageSaveToolContext): Promise<ImageSaveResult | string>;
+}, ctx: ImageSaveToolContext): Promise<ImageSaveResult>;

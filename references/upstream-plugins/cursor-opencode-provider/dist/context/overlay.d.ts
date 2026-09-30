@@ -39,6 +39,11 @@ export type OverlayWire = {
 };
 /** Merge live discovery into the conversation overlay epoch. */
 export declare function holdCapabilityOverlay(conversationId: string, live: OverlayHold): OverlayWire;
+/**
+ * Epoch-held skills with their OpenCode ids. The wire shape drops `id`
+ * (`AgentSkill` has no name field), but the host `skill` tool needs it.
+ */
+export declare function getHeldOverlaySkills(conversationId: string): OverlaySkill[];
 export declare function clearOverlayHold(conversationId: string): void;
 export declare function transferOverlayHold(previousConversationId: string, nextConversationId: string): void;
 export declare function resetOverlayHoldsForTests(): void;

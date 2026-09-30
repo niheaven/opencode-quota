@@ -20,11 +20,12 @@ const CURSOR_UPSTREAM_PRICING_PATH = new URL(
 );
 
 // Price not confirmed, so these stay unknown: models.dev rates differ from Cursor's for the
-// Gemini Flash ids, and muse-spark (meta) is not a pricing snapshot provider.
+// Gemini Flash and GLM 5.3 Flash ids, and muse-spark (meta) is not a pricing snapshot provider.
 const CURSOR_UPSTREAM_INTENTIONALLY_UNKNOWN_MODELS = new Set<string>([
   "gemini-3.6-flash",
   "gemini-3.7-flash",
   "gemini-3.8-flash",
+  "glm-5.3-flash",
   "muse-spark-1.3",
 ]);
 
@@ -437,6 +438,12 @@ describe("resolvePricingKey snapshot coverage", () => {
         { input: 2, output: 10, cache_read: 0.2 },
       ],
       [
+        "claude-sonnet-5-5",
+        "anthropic",
+        "claude-sonnet-5-5",
+        { input: 2, output: 10, cache_read: 0.2 },
+      ],
+      [
         "gemini-2.5-flash",
         "google",
         "gemini-2.5-flash",
@@ -461,6 +468,7 @@ describe("resolvePricingKey snapshot coverage", () => {
         { input: 1.5, output: 9, cache_read: 0.15 },
       ],
       ["glm-5.2", "zai", "glm-5.2", { input: 1.4, output: 4.4, cache_read: 0.26 }],
+      ["glm-5.3", "zai", "glm-5.3", { input: 1.4, output: 4.4, cache_read: 0.26 }],
       ["gpt-5-mini", "openai", "gpt-5-mini", { input: 0.25, output: 2, cache_read: 0.025 }],
       ["gpt-5.1", "openai", "gpt-5.1", { input: 1.25, output: 10, cache_read: 0.125 }],
       ["gpt-5.2", "openai", "gpt-5.2", { input: 1.75, output: 14, cache_read: 0.175 }],
@@ -501,6 +509,7 @@ describe("resolvePricingKey snapshot coverage", () => {
       ["claude-sonnet-4-5-1m", "claude-sonnet-4-5"],
       ["claude-sonnet-4-6-1m", "claude-sonnet-4-6"],
       ["claude-sonnet-5-1m", "claude-sonnet-5"],
+      ["claude-sonnet-5-5-1m", "claude-sonnet-5-5"],
       ["kimi-k3-1m", "kimi-k3"],
     ] as const;
     for (const [modelID, baseModelID] of sameRateLongContext) {
@@ -519,6 +528,7 @@ describe("resolvePricingKey snapshot coverage", () => {
       "gemini-3.6-flash",
       "gemini-3.7-flash",
       "gemini-3.8-flash",
+      "glm-5.3-flash",
       "gpt-5.4-1m",
       "gpt-5.5-1m",
       "gpt-5.6-sol-1m",

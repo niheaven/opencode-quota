@@ -32,6 +32,9 @@ import { resolveContinuationPolicy, sessionManager, } from "./session.js";
 import { CursorAuthError, CursorLocalCancellationError, CursorProtocolError, CursorProviderError, CursorRetryExhaustedError, CursorServerError, CursorTransportError, isTransientGrpcStatus, retrySuppressedError, toCursorProviderError, } from "./errors.js";
 import { readCache, cacheFilePath, resolveVariantParameters, resolveVariantMaxMode, extractCursorVariantParameters, resolveCursorWireModelId } from "./models.js";
 import { getOrBuildRequestContext } from "./context/frozen.js";
+import { getHeldOverlaySkills } from "./context/overlay.js";
+import { loadMergedConfig } from "./context/rules.js";
+import { buildDynamicCatalogRoutingInstruction, takeSkillCatalogChangeReminder, } from "./context/dynamic-catalog.js";
 import { admitContextEpoch, appendMidConversationMessage, resetContextEpochsForTests, } from "./context/epoch.js";
 import { workspaceRootFromRequestContext } from "./context/env.js";
 import { ensureOpencodeProjectDir, opencodeGlobalCacheDir, setHostCacheDirOverride, } from "./context/paths.js";
@@ -507,6 +510,12 @@ async function doStreamImpl(modelId, options, callOptions) {
     // false "orphaned tool results" errors after Cursor turn_ended and OpenCode
     // started the next step with old tools still in the prompt body.
     const trailingToolResults = extractTrailingToolResults(prompt);
+    // A host may submit an already rendered plan through its canonical stage
+    // tool after the Cursor Run has ended. The next call carries that tool result
+    // without a Cursor exec id; reconcile the approved mode before a fresh Run.
+    if (hasApprovedUncorrelatedPlanStageResult(prompt)) {
+        setActiveCursorMode(opencodeSessionKey(callOptions), "agent");
+    }
     let session = findContinuationSession(trailingToolResults);
     if (session) {
         // Write pending results onto the held-open Run. A dead stream closes the
@@ -533,19 +542,34 @@ async function doStreamImpl(modelId, options, callOptions) {
             if (historical > 0) {
                 trace(`fresh turn: ignoring ${historical} historical tool result(s) (not trailing)`);
             }
-            // Host may start a new user turn while the prior Run still has pending
-            // tools. Finish that Run on the same conversation (cancel stranded execs,
-            // drain turn_ended) before opening the new Run so the checkpoint prefix
-            // is preserved. registerSession will not close a prior Run that still
-            // has real pending execs; a failed prepare leaves that Run held.
-            try {
-                await preparePriorSessionForFreshTurn(sessionKey);
+            // An in-session helper (title/memory/task child) that reuses the parent
+            // OpenCode session id with a strictly smaller catalog must not cancel or
+            // supersede the held parent Run — that remints (`interrupted-run`) when
+            // the trailing tool result returns. Isolate onto an ephemeral conversation.
+            const busyPrior = sessionManager.findOpenByOpenCodeSessionId(sessionKey);
+            if (busyPrior
+                && !busyPrior.closed
+                && isProperCatalogSubset(extractTools(callOptions), busyPrior.toolCatalog ?? [])) {
+                trace(`fresh turn: isolating in-session helper — incomingTools subset of ` +
+                    `parentTools=${busyPrior.toolCatalog?.length ?? 0} ` +
+                    `priorSession=${busyPrior.sessionId} pending=${busyPrior.pending.size}`);
+                session = await openSession({ isolate: true });
             }
-            catch (error) {
-                trace(`fresh turn: prepare-prior failed — opening the new Run and leaving ` +
-                    `any still-pending prior held — ${error.message}`);
+            else {
+                // Host may start a new user turn while the prior Run still has pending
+                // tools. Finish that Run on the same conversation (cancel stranded execs,
+                // drain turn_ended) before opening the new Run so the checkpoint prefix
+                // is preserved. registerSession will not close a prior Run that still
+                // has real pending execs; a failed prepare leaves that Run held.
+                try {
+                    await preparePriorSessionForFreshTurn(sessionKey);
+                }
+                catch (error) {
+                    trace(`fresh turn: prepare-prior failed — opening the new Run and leaving ` +
+                        `any still-pending prior held — ${error.message}`);
+                }
+                session = await openSession();
             }
-            session = await openSession();
         }
     }
     let activeSession = session;
@@ -747,6 +771,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     const prompt = callOptions.prompt;
     const incomingTools = extractTools(callOptions);
     const sessionKey = opencodeSessionKey(callOptions);
+    const isolateHelper = startOptions?.isolate === true;
     const cacheDir = opencodeGlobalCacheDir();
     if (sessionKey) {
         const restored = await hydrateConversationState(cacheDir, sessionKey).catch((error) => {
@@ -798,18 +823,28 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     let resumeRecovery = recovery?.kind === "resume" ? recovery : undefined;
     let resuming = !!resumeRecovery;
     const lifecycle = !allowTools && !isCompaction && !recovery;
+    // Isolated helpers must not share the parent's openCodeSessionId or sticky
+    // conversation: registerSession would otherwise supersede the held parent Run.
+    const ephemeralRun = lifecycle || isolateHelper;
     // v1 sets `options.workspaceRoot` correctly per invocation (`input.directory`,
     // one plugin instance per project). OpenCode 2.0 runs one daemon across many
     // projects, so its static option is only a last-resort fallback. Prefer the
-    // per-request `x-opencode-directory` header, then the session mark recorded
-    // from `session.hook("context")` via `getSessionDirectory`.
+    // per-request `x-opencode-directory` header (set by the 2.0 plugin's
+    // `session.hook("model.request")`), then the session mark recorded from the
+    // session hooks via `getSessionDirectory`.
     const workspaceRoot = resolveSessionWorkspaceRoot({
         sessionKey,
         headers: callOptions.headers,
         workspaceRoot: options.workspaceRoot,
     });
     const baseSystemPrompt = extractSystemPrompt(prompt);
-    const interactionGuidance = buildOpenCodeInteractionGuidance(cursorTools, isCompaction, workspaceRoot);
+    // One merged-config load per Run: guidance MCP ids and RequestContext
+    // descriptors must agree, and warm turns must not pay for a second disk read.
+    const mergedConfig = isCompaction ? undefined : await loadMergedConfig(workspaceRoot);
+    const knownMcpServers = Object.keys(mergedConfig?.mcp ?? {});
+    const interactionGuidance = buildOpenCodeInteractionGuidance(cursorTools, isCompaction, workspaceRoot, {
+        knownMcpServers,
+    });
     // Prompt-identity diagnostics are filled after Context Epoch admission below
     // (baseline hash is the epoch baseline, not a per-turn host hash).
     let frozenSystemPromptHash;
@@ -825,9 +860,9 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         ? { conversationId: resumeRecovery.conversationId, reset: false, previousId: undefined }
         : bindConversationId(sessionKey, {
             reset: resetState.reset || recovery?.kind === "rebase",
-            ephemeral: lifecycle,
+            ephemeral: ephemeralRun,
         });
-    let conversationState = lifecycle
+    let conversationState = ephemeralRun
         ? undefined
         : resuming
             ? resumeRecovery.checkpoint
@@ -987,7 +1022,20 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     });
     // Freeze RequestContext per conversation_id (CLI parity). Rebuilding every
     // Run mutates volatile slices (git porcelain, layout) and breaks prompt cache.
-    const { context: requestContext, reused: requestContextReused } = await getOrBuildRequestContext(conversationId, { workspaceRoot, tools: cursorTools });
+    const { context: requestContext, reused: requestContextReused } = await getOrBuildRequestContext(conversationId, { workspaceRoot, tools: cursorTools, mergedConfig });
+    // Issue #29: after skills are in RequestContext, admit the catalog. OpenCode
+    // only Mid-Conversation-updates when the available-skills list changes
+    // (SkillGuidance / SkillInstructions) — never per-turn matched-id nudges.
+    // Gate on the host-permitted set, not the epoch-held advertisement.
+    if (!isCompaction && !lifecycle) {
+        const skillDialect = hostToolDialectFromTools(tools, options.defaultDialect);
+        const skillNudge = takeSkillCatalogChangeReminder(conversationId, {
+            hasSkillTool: allowTools && incomingTools.some((tool) => tool.name === "skill"),
+            skills: getHeldOverlaySkills(conversationId),
+            skillArgKey: skillDialect.skillArgKey,
+        });
+        userText = appendMidConversationMessage(userText, skillNudge);
+    }
     const contextSubagents = Array.isArray(requestContext.custom_subagents)
         ? requestContext.custom_subagents
             .map((agent) => agent && typeof agent === "object" && typeof agent.name === "string"
@@ -1097,7 +1145,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     }
     const hostToolDialect = hostToolDialectFromTools(tools, options.defaultDialect);
     trace(`host tool dialect: filePathKey=${hostToolDialect.filePathKey} shellTool=${hostToolDialect.shellTool} ` +
-        `tools=[${tools.map((t) => t.name).join(",")}]`);
+        `skillArgKey=${hostToolDialect.skillArgKey} tools=[${tools.map((t) => t.name).join(",")}]`);
     const session = {
         sessionId: crypto.randomUUID(),
         conversationId,
@@ -1125,7 +1173,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
             createPlanInTurn: false,
             switchModeInTurn: false,
         },
-        openCodeSessionId: lifecycle ? undefined : sessionKey,
+        openCodeSessionId: ephemeralRun ? undefined : sessionKey,
         hostAgent,
         stableSystemPromptHash: frozenSystemPromptHash,
         postCompactionRebase: isCompaction,
@@ -1138,7 +1186,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         // Seed from the per-OpenCode-session copy: merges in this turn (and after
         // checkpoint resumes/rebases, which rebuild the session here) expand
         // against the last observed host list, not an empty one.
-        mirroredTodos: snapshotMirroredTodosBySession(lifecycle ? undefined : sessionKey),
+        mirroredTodos: snapshotMirroredTodosBySession(ephemeralRun ? undefined : sessionKey),
         nextBridgedExecId: 900_000,
         blobs: new Map(),
         toolDescriptors,
@@ -1241,6 +1289,39 @@ export function findContinuationSession(toolResults) {
             return s;
     }
     return undefined;
+}
+/**
+ * True when `incoming` is a non-empty proper subset of `parent` by tool name.
+ * Used to spot in-session helpers that reuse the parent OpenCode session id
+ * with a reduced catalog (e.g. stripping `task` / `question` / `plan_exit`).
+ */
+export function isProperCatalogSubset(incoming, parent) {
+    if (incoming.length === 0 || parent.length === 0)
+        return false;
+    if (incoming.length >= parent.length)
+        return false;
+    const parentNames = new Set(parent.map((tool) => tool.name).filter((name) => !!name));
+    if (parentNames.size === 0)
+        return false;
+    let matched = 0;
+    for (const tool of incoming) {
+        const name = tool.name;
+        if (!name || !parentNames.has(name))
+            return false;
+        matched++;
+    }
+    return matched > 0 && matched < parentNames.size;
+}
+/**
+ * An open parent Run for this OpenCode session whose catalog strictly contains
+ * the incoming tools is treated as an in-session helper. Those calls must not
+ * cancel/supersede the parent (that remints on the trailing tool result).
+ */
+export function shouldIsolateInSessionHelper(openCodeSessionId, incomingTools) {
+    const prior = sessionManager.findOpenByOpenCodeSessionId(openCodeSessionId);
+    if (!prior || prior.closed)
+        return false;
+    return isProperCatalogSubset(incomingTools, prior.toolCatalog ?? []);
 }
 /** How long a fresh-turn drain may wait for Cursor `turn_ended` after bridged settle. */
 export const FRESH_TURN_DRAIN_TIMEOUT_MS = 8_000;
@@ -1835,6 +1916,14 @@ export function deliverContinuationResults(session, trailingToolResults) {
                     cursorSessionID: session.sessionId,
                 });
             }
+        }
+        // A directly called advertised plan-stage tool can own the same review
+        // gate as a bridged CreatePlan. Its successful result means execution was
+        // approved, so the next Run must carry agent-mode guidance.
+        if (!pending.bridged
+            && pending.toolName === CURSOR_PLAN_STAGE_TOOL
+            && r.error === undefined) {
+            setActiveCursorMode(session.openCodeSessionId, "agent");
         }
         // A host `todoread` result is the authoritative list. Refresh the mirrored
         // snapshot (direct reads and bridged native reads alike) so later merges
@@ -2864,7 +2953,7 @@ export async function pump(session, controller, ids, abortSignal) {
                                 imageId = stageCursorImage({
                                     path: target,
                                     projectDir,
-                                    mime: imageMimeForPath(target),
+                                    mime: imageMimeForPath(target, binaryWrite.data),
                                     data: binaryWrite.data,
                                     sessionId: session.openCodeSessionId,
                                 });
@@ -3299,6 +3388,25 @@ export function extractTrailingToolResults(prompt) {
         return [];
     return extractToolResults(prompt.slice(i + 1));
 }
+/** Detect a host-owned canonical plan review, excluding Cursor exec replies. */
+export function hasApprovedUncorrelatedPlanStageResult(prompt) {
+    if (prompt.length === 0 || prompt[prompt.length - 1].role !== "tool")
+        return false;
+    for (let i = prompt.length - 1; i >= 0 && prompt[i].role === "tool"; i--) {
+        const message = prompt[i];
+        if (!Array.isArray(message.content))
+            continue;
+        for (const part of message.content) {
+            if (part.type !== "tool-result" || part.toolName !== CURSOR_PLAN_STAGE_TOOL)
+                continue;
+            if (parseExecIdFromToolCallId(part.toolCallId))
+                continue;
+            const result = toolResultOutputToText(part.output);
+            return !result.isError;
+        }
+    }
+    return false;
+}
 function toolResultOutputToText(output) {
     if (output == null)
         return { text: "", isError: false };
@@ -3351,7 +3459,7 @@ export function groundCheckpointTurnText(userText, checkpoint, workspaceRoot, to
  * Redirect only to OpenCode tools that are genuinely advertised this turn;
  * compaction keeps its dedicated summary prompt unchanged.
  */
-export function buildOpenCodeInteractionGuidance(tools, isCompaction, workspaceRoot) {
+export function buildOpenCodeInteractionGuidance(tools, isCompaction, workspaceRoot, options = {}) {
     if (isCompaction)
         return undefined;
     const names = new Set(tools.map((tool) => tool.name));
@@ -3406,7 +3514,7 @@ export function buildOpenCodeInteractionGuidance(tools, isCompaction, workspaceR
         instructions.push(shell
             ? `- OpenCode \`execute\` is Code Mode JavaScript (\`code\`); it is not a shell. For OS commands, call OpenCode ${shell}. Do not pass \`command\` to \`execute\`.`
             : "- OpenCode `execute` is Code Mode JavaScript (`code`); it is not a shell. Do not pass `command` to `execute`.");
-        instructions.push("- When the host's Code Mode catalog lists additional tools, including MCP server tools, call them inside `execute` through `tools`. Use only the exact paths and signatures in that catalog or returned by its `search` function. Call `execute` with `{ code }` to run them; do not request a Code Mode tool as a direct OpenCode tool call.");
+        instructions.push("- Call tools named in the direct list by their own names, even when a server instruction says to reach them through `execute`. Use `execute` only for tools that appear in the host Code Mode catalog and are absent from that list. Use the exact paths and signatures from that catalog or its `search` function, and call `execute` with `{ code }`.");
     }
     if (names.has("task") || names.has("subagent")) {
         const target = names.has("task") ? "`task`" : "`subagent`";
@@ -3418,6 +3526,16 @@ export function buildOpenCodeInteractionGuidance(tools, isCompaction, workspaceR
         if (subagents.agents.some((agent) => agent.name === "scout")) {
             instructions.push("- Host `scout` is available for external documentation and dependency-source research. Use Cursor `cursor-guide` for that use case; local repository discovery still uses `bugbot`/`explore`.");
         }
+    }
+    // Issue #29: skill/MCP stay off Cursor's native top-level list on both
+    // OpenCode 1.x and 2.0 — route them through the dynamic catalog instead.
+    {
+        const dynamicCatalog = buildDynamicCatalogRoutingInstruction({
+            toolNames: tools.map((tool) => tool.sourceName ?? tool.name),
+            knownMcpServers: options.knownMcpServers,
+        });
+        if (dynamicCatalog)
+            instructions.push(dynamicCatalog);
     }
     if (names.has("write")) {
         instructions.push(names.has("edit")

@@ -68,6 +68,24 @@ export declare function findContinuationSession(toolResults: Array<{
     sessionId: string;
     execId: number;
 }>): CursorSession | undefined;
+/**
+ * True when `incoming` is a non-empty proper subset of `parent` by tool name.
+ * Used to spot in-session helpers that reuse the parent OpenCode session id
+ * with a reduced catalog (e.g. stripping `task` / `question` / `plan_exit`).
+ */
+export declare function isProperCatalogSubset(incoming: ReadonlyArray<{
+    name?: string;
+}>, parent: ReadonlyArray<{
+    name?: string;
+}>): boolean;
+/**
+ * An open parent Run for this OpenCode session whose catalog strictly contains
+ * the incoming tools is treated as an in-session helper. Those calls must not
+ * cancel/supersede the parent (that remints on the trailing tool result).
+ */
+export declare function shouldIsolateInSessionHelper(openCodeSessionId: string | undefined, incomingTools: ReadonlyArray<{
+    name?: string;
+}>): boolean;
 /** How long a fresh-turn drain may wait for Cursor `turn_ended` after bridged settle. */
 export declare const FRESH_TURN_DRAIN_TIMEOUT_MS = 8000;
 /**
@@ -133,6 +151,8 @@ type ExtractedToolResult = {
  * are ignored — they are conversation history, not replies for a held-open Run.
  */
 export declare function extractTrailingToolResults(prompt: LanguageModelV3CallOptions["prompt"]): ExtractedToolResult[];
+/** Detect a host-owned canonical plan review, excluding Cursor exec replies. */
+export declare function hasApprovedUncorrelatedPlanStageResult(prompt: LanguageModelV3CallOptions["prompt"]): boolean;
 /**
  * Checkpointed Runs do not resend the system prompt. Keep the workspace root
  * on the live user message, and require absolute `path` arguments when that is
@@ -147,7 +167,9 @@ export declare function groundCheckpointTurnText(userText: string, checkpoint: b
  * Redirect only to OpenCode tools that are genuinely advertised this turn;
  * compaction keeps its dedicated summary prompt unchanged.
  */
-export declare function buildOpenCodeInteractionGuidance(tools: OpencodeToolDef[], isCompaction: boolean, workspaceRoot: string): string | undefined;
+export declare function buildOpenCodeInteractionGuidance(tools: OpencodeToolDef[], isCompaction: boolean, workspaceRoot: string, options?: {
+    knownMcpServers?: Iterable<string>;
+}): string | undefined;
 /** Rough char→token estimate for mid-turn usage before TurnEnded arrives. */
 export declare function estimateTokens(chars: number): number;
 /** Preserve exact request-local Cursor counters as diagnostics. */

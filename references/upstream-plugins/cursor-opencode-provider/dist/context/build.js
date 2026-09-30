@@ -67,7 +67,7 @@ function buildAdvertisedSubagentCatalog(hostSubagents, discoveredAgents) {
  */
 export async function buildRequestContext(input) {
     const workspaceRoot = path.resolve(input.workspaceRoot || process.cwd());
-    const { rules, config, worktree } = await collectRules(workspaceRoot);
+    const { rules, config, worktree } = await collectRules(workspaceRoot, input.mergedConfig);
     const [dynamic, git, layout] = await Promise.all([
         buildDynamicRequestContextFromDiscovery(input, workspaceRoot, worktree, config),
         collectGit(workspaceRoot),
@@ -176,7 +176,9 @@ export async function buildDynamicRequestContext(input) {
     const workspaceRoot = path.resolve(input.workspaceRoot || process.cwd());
     const [worktree, config] = await Promise.all([
         findGitWorktree(workspaceRoot),
-        loadMergedConfig(workspaceRoot),
+        input.mergedConfig
+            ? Promise.resolve(input.mergedConfig)
+            : loadMergedConfig(workspaceRoot),
     ]);
     return buildDynamicRequestContextFromDiscovery(input, workspaceRoot, worktree, config);
 }
