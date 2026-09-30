@@ -1293,7 +1293,8 @@ function parseCopilotInternalUser(
   }
   // Token-based billing reports a negative remaining once usage goes over the
   // entitlement, alongside a provider-reported clamp in [0, 100].
-  const overLimitCreditsUsed = readFiniteNumber(snapshot?.credits_used);
+  const creditsUsed = readFiniteNumber(snapshot?.credits_used);
+  const hasValidCreditsUsed = creditsUsed !== undefined && creditsUsed >= 0;
   if (
     tokenBasedBilling &&
     entitlement !== undefined &&
@@ -1302,14 +1303,12 @@ function parseCopilotInternalUser(
     remaining < 0 &&
     hasReportedPercent
   ) {
-    const creditsUsed = overLimitCreditsUsed;
     return {
       success: true,
       mode: "user_quota",
-      unit: "premium_interactions",
-      used: creditsUsed !== undefined && creditsUsed >= 0 ? creditsUsed : entitlement - remaining,
-      authority:
-        creditsUsed !== undefined && creditsUsed >= 0 ? "provider_reported" : "locally_derived",
+      unit: hasValidCreditsUsed ? "ai_credits" : "premium_interactions",
+      used: hasValidCreditsUsed ? creditsUsed : entitlement - remaining,
+      authority: hasValidCreditsUsed ? "provider_reported" : "locally_derived",
       total: entitlement,
       percentRemaining: reportedPercentRemaining,
       plan,
