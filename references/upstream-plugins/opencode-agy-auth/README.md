@@ -1,5 +1,11 @@
 # OpenCode Antigravity CLI Auth Plugin
 
+[![npm version](https://img.shields.io/npm/v/@anthonyhaussman/opencode-agy-auth)](https://www.npmjs.com/package/@anthonyhaussman/opencode-agy-auth)
+[![npm downloads](https://img.shields.io/npm/dw/@anthonyhaussman/opencode-agy-auth)](https://www.npmjs.com/package/@anthonyhaussman/opencode-agy-auth)
+[![CI](https://github.com/anthonyhaussman/opencode-agy-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/anthonyhaussman/opencode-agy-auth/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/anthonyhaussman/opencode-agy-auth)](https://github.com/anthonyhaussman/opencode-agy-auth/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/anthonyhaussman/opencode-agy-auth?style=social)](https://github.com/anthonyhaussman/opencode-agy-auth)
+
 An [OpenCode](https://opencode.ai/) authentication plugin that enables seamless interaction with the Antigravity CLI (`agy`) by hooking into its authentication, quota retrieval, and dynamic model fetching layers.
 
 ## Features
@@ -161,3 +167,7 @@ The `@alpha` channel provides dual compatibility with both OpenCode v1 and [Open
 
 > [!WARNING]
 > **Instability Warning**: The `@alpha` release contains experimental features, active development builds, and potential breaking protocol changes. It may be unstable, break unexpectedly, or cause disruptions in session authentication and model requests. Use only for testing and development. For day-to-day work, use the stable release.
+
+## Star History & Support
+
+If this plugin saved you time or made using Antigravity models in OpenCode smoother, consider giving the repository a star on [GitHub](https://github.com/anthonyhaussman/opencode-agy-auth) - it helps others discover the project.
