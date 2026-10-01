@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for the idea. Please keep the proposal scoped and concrete.
-        v5 gets bug fixes only; feature ideas are collected for the OpenCode 2 remake.
+        **v5** takes bug fixes and small upgrades that **don't change how quota is shown**. Ideas that change the display (sidebar, toasts, compact line, command output) are collected for **v6** in [#293](https://github.com/slkiser/opencode-quota/issues/293); you can add yours there instead. Asking for a new provider? Use the **Provider request** form.
         Review `CONTRIBUTING.md` for contribution expectations.
         Please write a short, specific title. Issues missing key details get the `needs info` label and close after 21 days without activity.
 
@@ -20,6 +20,18 @@ body:
           required: true
         - label: I reviewed current behavior on the production released OpenCode version.
           required: true
+
+  - type: dropdown
+    id: display_change
+    attributes:
+      label: Does this change how quota is shown?
+      description: For example a new row, color, format, or layout in the sidebar, toasts, compact line, or command output.
+      options:
+        - No, it doesn't change the display
+        - Yes, it changes the display
+        - Not sure
+    validations:
+      required: true
 
   - type: input
     id: opencode_version

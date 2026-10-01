@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for the request. New providers need a way to read quota, so links to the usage API or docs matter most.
-        Built-in providers need a models.dev listing, two independent requests, and a documented API. Most providers already work as a [custom provider](https://github.com/slkiser/opencode-quota/blob/main/docs/readme/providers.md#custom-providers).
+        Built-in providers need a models.dev listing, two independent requests, and a documented API. Built-in providers that meet this bar can still be added in v5. Most providers already work as a [custom provider](https://github.com/slkiser/opencode-quota/blob/main/docs/readme/providers.md#custom-providers).
         Review `CONTRIBUTING.md` before submitting.
         Please write a short, specific title. Issues missing key details get the `needs info` label and close after 21 days without activity.
 

@@ -23,6 +23,55 @@ interface Workflow {
   >;
 }
 
+type IssueScriptCall = { method: string; labels?: string[] };
+
+// Runs one actions/github-script step of the issue workflow against a fake issue.
+async function runIssueScript(
+  jobId: string,
+  issue: { title: string; body: string; labels?: string[] },
+): Promise<IssueScriptCall[]> {
+  const workflow = parse(
+    await readFile(".github/workflows/thin-issue-check.yml", "utf8"),
+  ) as Workflow;
+  const script = workflow.jobs[jobId]?.steps?.[0]?.with?.script;
+  if (typeof script !== "string") throw new Error(`no script in job ${jobId}`);
+
+  const calls: IssueScriptCall[] = [];
+  const github = {
+    rest: {
+      issues: {
+        addLabels: async (params: { labels: string[] }) => {
+          calls.push({ method: "addLabels", labels: params.labels });
+        },
+        createComment: async () => {
+          calls.push({ method: "createComment" });
+        },
+      },
+    },
+  };
+  const context = {
+    repo: { owner: "slkiser", repo: "opencode-quota" },
+    payload: {
+      issue: {
+        number: 1,
+        title: issue.title,
+        body: issue.body,
+        labels: (issue.labels ?? []).map((name) => ({ name })),
+      },
+    },
+  };
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  await new AsyncFunction("github", "context", script)(github, context);
+  return calls;
+}
+
+// GitHub renders each issue form answer as "### <label>", a blank line, then the answer.
+function formBody(answers: Array<[label: string, answer: string]>): string {
+  return answers.map(([label, answer]) => `### ${label}\n\n${answer}`).join("\n\n");
+}
+
+const LONG_SUMMARY = "The sidebar shows the weekly window twice after a restart.";
+
 describe("GitHub workflows", () => {
   it("only lets stale automation close issues labeled needs info", async () => {
     const source = await readFile(".github/workflows/close-inactive-issues.yml", "utf8");
@@ -52,6 +101,107 @@ describe("GitHub workflows", () => {
     const workflow = parse(source) as Workflow;
 
     expect(workflow.jobs.check?.permissions).toEqual({ issues: "write" });
+  });
+
+  it("adds v4 and v6 labels from issue form answers, and never removes labels", async () => {
+    const workflow = parse(
+      await readFile(".github/workflows/thin-issue-check.yml", "utf8"),
+    ) as Workflow;
+    expect(workflow.jobs["version-labels"]?.permissions).toEqual({ issues: "write" });
+
+    const title = "Sidebar shows a window twice";
+    const v4Body = formBody([
+      ["Which OpenCode do you use?", "OpenCode 1 (opencode-quota 4.x)"],
+      ["Bug summary", LONG_SUMMARY],
+    ]);
+    await expect(runIssueScript("version-labels", { title, body: v4Body })).resolves.toEqual([
+      { method: "addLabels", labels: ["v4"] },
+    ]);
+    await expect(
+      runIssueScript("version-labels", { title, body: v4Body.replace(/\n/gu, "\r\n") }),
+    ).resolves.toEqual([{ method: "addLabels", labels: ["v4"] }]);
+    await expect(
+      runIssueScript("version-labels", {
+        title,
+        body: formBody([
+          ["Does this change how quota is shown?", "Yes, it changes the display"],
+          ["Problem statement", LONG_SUMMARY],
+        ]),
+      }),
+    ).resolves.toEqual([{ method: "addLabels", labels: ["v6"] }]);
+
+    for (const body of [
+      formBody([["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"]]),
+      formBody([["Does this change how quota is shown?", "No, it doesn't change the display"]]),
+      formBody([["Does this change how quota is shown?", "Not sure"]]),
+      formBody([["Bug summary", "OpenCode 1 (opencode-quota 4.x)"]]),
+      "",
+    ]) {
+      await expect(runIssueScript("version-labels", { title, body })).resolves.toEqual([]);
+    }
+    // Already labeled (or labeled by hand with an answer that no longer matches): no calls.
+    await expect(
+      runIssueScript("version-labels", { title, body: v4Body, labels: ["v4"] }),
+    ).resolves.toEqual([]);
+    await expect(
+      runIssueScript("version-labels", {
+        title,
+        body: formBody([["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"]]),
+        labels: ["v4", "v6"],
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  it("does not count the version dropdown answers as typed text in the thin issue check", async () => {
+    const thinBody = formBody([
+      ["Which OpenCode do you use?", "OpenCode 1 (opencode-quota 4.x)"],
+      ["Does this change how quota is shown?", "No, it doesn't change the display"],
+      ["Bug summary", "broken"],
+    ]);
+    await expect(
+      runIssueScript("check", { title: "Sidebar shows a window twice", body: thinBody }),
+    ).resolves.toEqual([
+      { method: "addLabels", labels: ["needs info"] },
+      { method: "createComment" },
+    ]);
+
+    const fullBody = formBody([
+      ["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"],
+      ["Bug summary", LONG_SUMMARY],
+    ]);
+    await expect(
+      runIssueScript("check", { title: "Sidebar shows a window twice", body: fullBody }),
+    ).resolves.toEqual([]);
+  });
+
+  it("asks which OpenCode and whether the display changes right after the pre-flight checks", async () => {
+    const bug = parse(await readFile(".github/ISSUE_TEMPLATE/bug_report.yml", "utf8")) as {
+      body: Array<{ id?: string; attributes: { label?: string; options?: unknown[] } }>;
+    };
+    const feature = parse(
+      await readFile(".github/ISSUE_TEMPLATE/feature_request.yml", "utf8"),
+    ) as typeof bug;
+
+    expect(bug.body[1]?.id).toBe("checks");
+    expect(bug.body[2]).toMatchObject({
+      type: "dropdown",
+      id: "opencode_line",
+      attributes: {
+        label: "Which OpenCode do you use?",
+        options: ["OpenCode 2 (opencode-quota 5.x)", "OpenCode 1 (opencode-quota 4.x)"],
+      },
+      validations: { required: true },
+    });
+    expect(feature.body[1]?.id).toBe("checks");
+    expect(feature.body[2]).toMatchObject({
+      type: "dropdown",
+      id: "display_change",
+      attributes: {
+        label: "Does this change how quota is shown?",
+        options: ["No, it doesn't change the display", "Yes, it changes the display", "Not sure"],
+      },
+      validations: { required: true },
+    });
   });
 
   it("keeps issue forms without title prefills and with their labels", async () => {
