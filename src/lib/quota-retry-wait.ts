@@ -1,5 +1,5 @@
 /**
- * Opt-in `waitForQuotaReset`: when a model request hits a provider limit and the quota data
+ * `waitForQuotaReset` (on by default): when a model request hits a provider limit and the quota data
  * shows a used-up window for that model's provider, OpenCode retries once that window resets
  * instead of following its normal retry timing.
  */
@@ -55,8 +55,8 @@ export function getQuotaResetRetryDelayMs(
 
 /**
  * The retry delay for a limit error on `event.model`, or undefined to keep OpenCode's decision.
- * Quota comes from the same provider refresh path as the sidebar and toasts: a cached result
- * younger than `minIntervalMs` is reused, otherwise the provider is asked once.
+ * Quota comes from the same provider refresh path as the sidebar and toasts, but skips the cache:
+ * the limit error itself shows the quota changed, so the provider is asked once for fresh data.
  */
 export async function resolveQuotaResetRetryDelayMs(
   host: Pick<QuotaSurfaceHost, "client" | "roots">,
@@ -78,6 +78,7 @@ export async function resolveQuotaResetRetryDelayMs(
     request: createQuotaRuntimeRequestContext(runtime),
     workspaceRoot: runtime.roots.workspaceRoot,
     surfaceExplicitProviderIssues: false,
+    bypassProviderCache: true,
     providers: runtime.providers,
   });
   return getQuotaResetRetryDelayMs(

@@ -52,6 +52,7 @@ Also:
 - **Web and Desktop:** slash commands post the report in the chat.
 - **Scripts and status bars:** JSON, an export file, and metrics. See [External integration](docs/readme/external-integration.md).
 - **Your look:** used or left, reset style, a runs-out estimate, and more. See [Configuration](docs/readme/configuration.md).
+- **Retry at the reset:** when a request hits a limit and that provider's quota shows a used-up window, OpenCode retries after it resets. Turn off with `waitForQuotaReset: false`.
 
 ## Updating
 

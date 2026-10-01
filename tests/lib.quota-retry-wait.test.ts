@@ -196,17 +196,36 @@ describe("resolveQuotaResetRetryDelayMs", () => {
       () => false,
     );
     mocks.getProviders.mockReturnValue([zai, copilot]);
-    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ waitForQuotaReset: true }));
+    // waitForQuotaReset is on by default.
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig());
 
     await expect(resolve(limitEvent)).resolves.toBe(90 * MINUTE_MS + QUOTA_RESET_RETRY_BUFFER_MS);
     expect(zai.fetch).toHaveBeenCalledTimes(1);
     expect(copilot.fetch).not.toHaveBeenCalled();
   });
 
+  it("asks the provider for fresh quota on every limit error instead of reusing the cache", async () => {
+    // A cacheable provider and a long minIntervalMs: a normal refresh would reuse the first result.
+    const zai = {
+      ...makeProvider("zai", [window("5h", 0, at(90 * MINUTE_MS))], () => true),
+      cachePolicy: { kind: "account-neutral" },
+    };
+    mocks.getProviders.mockReturnValue([zai]);
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ minIntervalMs: 60 * MINUTE_MS }));
+
+    const { resolveQuotaResetRetryDelayMs } = await import("../src/lib/quota-retry-wait.js");
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      await expect(resolveQuotaResetRetryDelayMs(createHost(), limitEvent)).resolves.toBe(
+        90 * MINUTE_MS + QUOTA_RESET_RETRY_BUFFER_MS,
+      );
+      expect(zai.fetch).toHaveBeenCalledTimes(attempt);
+    }
+  });
+
   it("keeps OpenCode's decision when the setting is off", async () => {
     const zai = makeProvider("zai", [window("5h", 0, at(90 * MINUTE_MS))], () => true);
     mocks.getProviders.mockReturnValue([zai]);
-    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig());
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ waitForQuotaReset: false }));
 
     await expect(resolve(limitEvent)).resolves.toBeUndefined();
     expect(zai.fetch).not.toHaveBeenCalled();

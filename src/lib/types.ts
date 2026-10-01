@@ -266,7 +266,7 @@ export const DEFAULT_CONFIG: QuotaToastConfig = {
   showOnBothFail: true,
   toastDurationMs: 9000,
   onlyCurrentModel: false,
-  waitForQuotaReset: false,
+  waitForQuotaReset: true,
   showSessionTokens: true,
   sessionTokenScope: "current",
   tuiSidebarPanel: {

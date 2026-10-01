@@ -943,9 +943,10 @@ describe("loadConfig", () => {
     }
   });
 
-  it("defaults waitForQuotaReset off and accepts boolean overrides", async () => {
+  it("defaults waitForQuotaReset on and accepts boolean overrides", async () => {
     const defaults = await loadSdkConfig({});
-    expect(defaults.config.waitForQuotaReset).toBe(false);
+    expect(defaults.config.waitForQuotaReset).toBe(true);
+    expect(defaults.meta.settingSources).not.toHaveProperty("waitForQuotaReset");
 
     for (const waitForQuotaReset of [true, false]) {
       const configured = await loadSdkConfig({ waitForQuotaReset });
@@ -957,7 +958,7 @@ describe("loadConfig", () => {
 
     for (const invalid of ["true", 1, null]) {
       const rejected = await loadSdkConfig({ waitForQuotaReset: invalid });
-      expect(rejected.config.waitForQuotaReset).toBe(false);
+      expect(rejected.config.waitForQuotaReset).toBe(true);
       expect(rejected.meta.settingSources).not.toHaveProperty("waitForQuotaReset");
     }
   });

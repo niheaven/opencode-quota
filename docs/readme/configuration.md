@@ -39,7 +39,7 @@ Strict `.json` files also work. Not sure which file is active? Run `/quota_statu
 | Include subagent session tokens             | `sessionTokenScope: "tree"`                 |
 | Allow more time for provider requests       | `requestTimeoutMs: 12000`                   |
 | Write quota JSON for another tool           | `export.enabled: true`                      |
-| Retry at the quota reset after a limit      | `waitForQuotaReset: true`                   |
+| Keep OpenCode's normal retry after a limit  | `waitForQuotaReset: false`                  |
 
 The installer picks `allWindows`. If the setting is missing, the default is `singleWindow`.
 
@@ -207,7 +207,7 @@ Provider credentials (API keys, cookies, tokens) are never set here. See [API ke
 | `resetTimeDecimals`           | unset          | `0`–`4`: show the largest countdown unit as a decimal. |
 | `resetTimeSpaced`             | `true`         | `false` writes countdowns without spaces (`2d5h14m`). |
 | `onlyCurrentModel`            | `false`        | Show only the current model's provider, when it can be found. |
-| `waitForQuotaReset`           | `false`        | When a request hits a provider limit and that model's provider shows a window with 0% left, OpenCode retries 1 minute after the earliest such window resets (at most 5 hours per wait) instead of retrying quickly or giving up. Quota data younger than `minIntervalMs` is reused. |
+| `waitForQuotaReset`           | `true`         | On by default. When a request hits a provider limit, the plugin asks that model's provider for fresh quota; if a window shows 0% left, OpenCode retries 1 minute after the earliest such window resets (at most 5 hours per wait) instead of retrying quickly or giving up. Interrupt the session to stop waiting (Esc twice in the TUI). Set `"waitForQuotaReset": false` to keep OpenCode's normal retry timing. |
 | `showSessionTokens`           | `true`         | Show `Session input/output tokens` when available. Cached input appears in parentheses next to input. |
 | `sessionTokenScope`           | `"current"`    | `current` or `tree` (adds subagent sessions). See [above](#include-subagent-session-tokens). |
 | `resetNotifications.enabled`  | `false`        | Popup when a watched window resets. Needs popup toasts. |
