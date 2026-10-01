@@ -25,6 +25,7 @@ import {
   type QuotaReportMetadata,
   removeQuotaReports,
 } from "./lib/quota-report-message.js";
+import { resolveQuotaResetRetryDelayMs } from "./lib/quota-retry-wait.js";
 import type { QuotaSessionModelContext } from "./lib/quota-runtime-context.js";
 import {
   getQuotaFooter,
@@ -260,6 +261,16 @@ export const QuotaToastPlugin = Plugin.define({
         message.content.some((part) => part.type === "text" && part.text.trim() !== ""),
       );
       if (!textLeft) event.result = "";
+    });
+    // With waitForQuotaReset on, a request that hit a provider limit is retried after the
+    // used-up quota window resets. Any failure keeps OpenCode's own retry decision.
+    await ctx.session.hook("retry", async (event) => {
+      try {
+        const delay = await resolveQuotaResetRetryDelayMs(surfaceHost, event);
+        if (delay !== undefined) event.decision = { retry: true, delay };
+      } catch (error) {
+        console.warn(`[opencode-quota] retry hook failed: ${logReason(error)}`);
+      }
     });
 
     // Every login read in this process goes through this location's `ctx.integration`. Bound

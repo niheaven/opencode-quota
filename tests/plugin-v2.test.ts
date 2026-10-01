@@ -7,6 +7,10 @@ vi.mock("../src/lib/quota-dialog-commands.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/lib/quota-dialog-commands.js")>()),
   buildQuotaDialogCommandOutput: buildOutput,
 }));
+const resolveRetryDelay = vi.hoisted(() => vi.fn());
+vi.mock("../src/lib/quota-retry-wait.js", () => ({
+  resolveQuotaResetRetryDelayMs: resolveRetryDelay,
+}));
 
 import {
   clearReadAuthFileCacheForTests,
@@ -35,6 +39,14 @@ type RegisteredCommand = {
 type Part = { type: string; text?: string };
 type Message = { role: string; metadata?: Record<string, unknown>; content: Part[] };
 type HookEvent = { messages: Message[]; result?: string };
+type RetryEvent = {
+  sessionID: string;
+  agent: string;
+  model: { id: string; providerID: string };
+  error: { type: string; message: string; status?: number };
+  attempt: number;
+  decision: { retry: false } | { retry: true; delay: number };
+};
 
 function createContext() {
   const tools: RegisteredTool[] = [];
@@ -104,6 +116,7 @@ const user = (text: string, metadata?: Record<string, unknown>): Message => ({
 describe("V2 server plugin", () => {
   beforeEach(() => {
     buildOutput.mockReset();
+    resolveRetryDelay.mockReset();
   });
 
   it("registers a structured quota diagnostics tool without a server toast dependency", async () => {
@@ -215,7 +228,7 @@ describe("V2 server plugin", () => {
     await plugin.setup(ctx as never);
     const report = formatQuotaReportMessage("openai 42%");
 
-    expect([...hooks.keys()]).toEqual(["context", "compaction", "generate", "title"]);
+    expect([...hooks.keys()]).toEqual(["context", "compaction", "generate", "title", "retry"]);
     for (const name of ["context", "compaction", "generate"]) {
       const tagged = user(report, { opencodeQuota: { command: "quota", title: "Quota", at: 1 } });
       const question = user("What is my quota?");
@@ -297,6 +310,42 @@ describe("V2 server plugin", () => {
     title(normal);
     expect(normal.result).toBeUndefined();
     expect(normal.messages[0]).toBe(plain);
+  });
+
+  it("retries at the quota reset only when the quota data gives a delay", async () => {
+    const { ctx, hooks } = createContext();
+    await plugin.setup(ctx as never);
+    const retry = hook(hooks, "retry") as unknown as (event: RetryEvent) => Promise<void>;
+    const event = (decision: RetryEvent["decision"]): RetryEvent => ({
+      sessionID: "session-1",
+      agent: "build",
+      model: { id: "glm-4.6", providerID: "zai-coding-plan" },
+      error: { type: "provider.quota", message: "Usage limit reached", status: 429 },
+      attempt: 2,
+      decision,
+    });
+
+    resolveRetryDelay.mockResolvedValueOnce(5_460_000);
+    const waiting = event({ retry: false });
+    await retry(waiting);
+    expect(waiting.decision).toEqual({ retry: true, delay: 5_460_000 });
+    expect(resolveRetryDelay).toHaveBeenCalledWith(
+      expect.objectContaining({ client: expect.anything(), roots: expect.anything() }),
+      waiting,
+    );
+
+    resolveRetryDelay.mockResolvedValueOnce(undefined);
+    const unchanged = event({ retry: true, delay: 2_000 });
+    await retry(unchanged);
+    expect(unchanged.decision).toEqual({ retry: true, delay: 2_000 });
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolveRetryDelay.mockRejectedValueOnce(new Error("quota read failed"));
+    const failed = event({ retry: false });
+    await expect(retry(failed)).resolves.toBeUndefined();
+    expect(failed.decision).toEqual({ retry: false });
+    expect(warn).toHaveBeenCalledWith("[opencode-quota] retry hook failed: quota read failed");
+    warn.mockRestore();
   });
 
   it("reads logins through ctx.integration from setup until cleanup", async () => {

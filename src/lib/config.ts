@@ -68,6 +68,7 @@ export const QUOTA_TOAST_SETTING_SOURCE_KEYS = [
   "showOnBothFail",
   "toastDurationMs",
   "onlyCurrentModel",
+  "waitForQuotaReset",
   "showSessionTokens",
   "sessionTokenScope",
   "tuiSidebarPanel.enabled",
@@ -180,6 +181,7 @@ type ValidatedQuotaToastPatch = {
   showOnBothFail?: boolean;
   toastDurationMs?: number;
   onlyCurrentModel?: boolean;
+  waitForQuotaReset?: boolean;
   showSessionTokens?: boolean;
   sessionTokenScope?: SessionTokenScope;
   tuiSidebarPanel?: TuiSidebarPanelPatch;
@@ -826,6 +828,13 @@ function extractValidatedQuotaToastPatch(
   }
 
   if (
+    hasOwnKey(quotaToastConfig, "waitForQuotaReset") &&
+    typeof quotaToastConfig.waitForQuotaReset === "boolean"
+  ) {
+    patch.waitForQuotaReset = quotaToastConfig.waitForQuotaReset;
+  }
+
+  if (
     hasOwnKey(quotaToastConfig, "showSessionTokens") &&
     typeof quotaToastConfig.showSessionTokens === "boolean"
   ) {
@@ -1062,6 +1071,11 @@ function applyValidatedQuotaToastPatch(
   if (hasOwnKey(patch, "onlyCurrentModel")) {
     config.onlyCurrentModel = patch.onlyCurrentModel!;
     applySettingSource(settingSources, "onlyCurrentModel", sourcePath);
+  }
+
+  if (hasOwnKey(patch, "waitForQuotaReset")) {
+    config.waitForQuotaReset = patch.waitForQuotaReset!;
+    applySettingSource(settingSources, "waitForQuotaReset", sourcePath);
   }
 
   if (hasOwnKey(patch, "showSessionTokens")) {

@@ -182,6 +182,12 @@ export interface QuotaToastConfig {
   onlyCurrentModel: boolean;
 
   /**
+   * If true, a request that hit a provider limit waits until the used-up quota window of that
+   * model's provider resets, instead of OpenCode's normal retry timing.
+   */
+  waitForQuotaReset: boolean;
+
+  /**
    * If true, show the Session input/output tokens section in quota displays when session token data is available.
    * "allWindows" keeps per-model rows on toast + sidebar; "singleWindow"
    * uses a one-line total summary.
@@ -260,6 +266,7 @@ export const DEFAULT_CONFIG: QuotaToastConfig = {
   showOnBothFail: true,
   toastDurationMs: 9000,
   onlyCurrentModel: false,
+  waitForQuotaReset: false,
   showSessionTokens: true,
   sessionTokenScope: "current",
   tuiSidebarPanel: {

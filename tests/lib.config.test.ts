@@ -943,6 +943,25 @@ describe("loadConfig", () => {
     }
   });
 
+  it("defaults waitForQuotaReset off and accepts boolean overrides", async () => {
+    const defaults = await loadSdkConfig({});
+    expect(defaults.config.waitForQuotaReset).toBe(false);
+
+    for (const waitForQuotaReset of [true, false]) {
+      const configured = await loadSdkConfig({ waitForQuotaReset });
+      expect(configured.config.waitForQuotaReset).toBe(waitForQuotaReset);
+      expect(configured.meta.settingSources).toEqual({
+        waitForQuotaReset: "client.config.get",
+      });
+    }
+
+    for (const invalid of ["true", 1, null]) {
+      const rejected = await loadSdkConfig({ waitForQuotaReset: invalid });
+      expect(rejected.config.waitForQuotaReset).toBe(false);
+      expect(rejected.meta.settingSources).not.toHaveProperty("waitForQuotaReset");
+    }
+  });
+
   it("loads both display options together without changing reset decimals", async () => {
     const configured = await loadSdkConfig({
       percentLabelStyle: "bare",

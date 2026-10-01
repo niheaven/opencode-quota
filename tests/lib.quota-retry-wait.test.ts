@@ -1,0 +1,231 @@
+import { rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { QuotaProviderResult, QuotaToastEntry } from "../src/lib/entries.js";
+import type { QuotaRetryEvent } from "../src/lib/quota-retry-wait.js";
+import {
+  createConfigModuleMock,
+  createPluginRuntimePathsMockModule,
+  createProvidersRegistryModuleMock,
+  makeQuotaToastTestConfig,
+} from "./helpers/plugin-test-harness.js";
+
+const TEST_RUNTIME_ROOT = "/tmp/opencode-quota-lib-quota-retry-wait-tests";
+const NOW_MS = Date.parse("2026-01-01T00:00:00.000Z");
+const MINUTE_MS = 60_000;
+const TEST_ACCOUNTING = {
+  resultType: "quota",
+  acquisitionMethod: "remote_api",
+  ownership: "maintained",
+  authority: "provider_reported",
+} as const;
+
+const mocks = vi.hoisted(() => ({
+  loadConfig: vi.fn(),
+  getProviders: vi.fn(),
+}));
+
+vi.mock("../src/lib/config.js", () => createConfigModuleMock(mocks.loadConfig));
+vi.mock("../src/providers/registry.js", () =>
+  createProvidersRegistryModuleMock(mocks.getProviders),
+);
+vi.mock("../src/lib/opencode-runtime-paths.js", () =>
+  createPluginRuntimePathsMockModule(TEST_RUNTIME_ROOT),
+);
+
+// Loaded after the mocks above are set up.
+const {
+  getQuotaResetRetryDelayMs,
+  isQuotaLimitError,
+  QUOTA_RESET_RETRY_BUFFER_MS,
+  QUOTA_RESET_RETRY_MAX_DELAY_MS,
+} = await import("../src/lib/quota-retry-wait.js");
+
+function at(offsetMs: number): string {
+  return new Date(NOW_MS + offsetMs).toISOString();
+}
+
+function window(name: string, percentRemaining: number, resetTimeIso?: string): QuotaToastEntry {
+  return {
+    accounting: TEST_ACCOUNTING,
+    name,
+    percentRemaining,
+    ...(resetTimeIso ? { resetTimeIso } : {}),
+  };
+}
+
+function result(entries: QuotaToastEntry[]): QuotaProviderResult {
+  return { attempted: true, entries, errors: [] };
+}
+
+describe("isQuotaLimitError", () => {
+  it("accepts OpenCode's rate-limit and quota errors and any HTTP 429", () => {
+    expect(isQuotaLimitError({ type: "provider.rate-limit" })).toBe(true);
+    expect(isQuotaLimitError({ type: "provider.quota" })).toBe(true);
+    expect(isQuotaLimitError({ type: "provider.unknown", status: 429 })).toBe(true);
+  });
+
+  it("rejects other errors", () => {
+    for (const type of ["provider.auth", "provider.transport", "provider.internal", "unknown"]) {
+      expect(isQuotaLimitError({ type, status: 500 })).toBe(false);
+    }
+  });
+});
+
+describe("getQuotaResetRetryDelayMs", () => {
+  it("waits until a used-up window resets, plus the buffer", () => {
+    const delay = getQuotaResetRetryDelayMs(
+      [result([window("5h", 0, at(90 * MINUTE_MS)), window("Weekly", 40, at(MINUTE_MS))])],
+      NOW_MS,
+    );
+    expect(delay).toBe(90 * MINUTE_MS + QUOTA_RESET_RETRY_BUFFER_MS);
+  });
+
+  it("picks the earliest reset among used-up windows of every result", () => {
+    const delay = getQuotaResetRetryDelayMs(
+      [
+        result([window("5h", 0, at(90 * MINUTE_MS))]),
+        result([window("Hourly", 0, at(20 * MINUTE_MS))]),
+      ],
+      NOW_MS,
+    );
+    expect(delay).toBe(20 * MINUTE_MS + QUOTA_RESET_RETRY_BUFFER_MS);
+  });
+
+  it("caps the wait", () => {
+    const delay = getQuotaResetRetryDelayMs(
+      [result([window("Weekly", 0, at(3 * 24 * 60 * MINUTE_MS))])],
+      NOW_MS,
+    );
+    expect(delay).toBe(QUOTA_RESET_RETRY_MAX_DELAY_MS);
+    expect(QUOTA_RESET_RETRY_MAX_DELAY_MS).toBe(5 * 60 * MINUTE_MS);
+  });
+
+  it("has no delay without a used-up window whose reset is still ahead", () => {
+    expect(getQuotaResetRetryDelayMs([], NOW_MS)).toBeUndefined();
+    expect(
+      getQuotaResetRetryDelayMs([result([window("5h", 3, at(90 * MINUTE_MS))])], NOW_MS),
+    ).toBeUndefined();
+    expect(
+      getQuotaResetRetryDelayMs([result([window("5h", 0, at(-MINUTE_MS))])], NOW_MS),
+    ).toBeUndefined();
+    expect(getQuotaResetRetryDelayMs([result([window("5h", 0, at(0))])], NOW_MS)).toBeUndefined();
+    expect(getQuotaResetRetryDelayMs([result([window("5h", 0)])], NOW_MS)).toBeUndefined();
+    expect(
+      getQuotaResetRetryDelayMs([result([window("5h", 0, "not a date")])], NOW_MS),
+    ).toBeUndefined();
+    expect(
+      getQuotaResetRetryDelayMs(
+        [
+          result([
+            {
+              kind: "value",
+              accounting: TEST_ACCOUNTING,
+              name: "Balance",
+              value: "USD 0.00",
+              resetTimeIso: at(MINUTE_MS),
+            },
+          ]),
+        ],
+        NOW_MS,
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("resolveQuotaResetRetryDelayMs", () => {
+  const limitEvent: QuotaRetryEvent = {
+    model: { id: "glm-4.6", providerID: "zai-coding-plan" },
+    error: { type: "provider.quota", status: 429 },
+  };
+
+  function makeProvider(
+    id: string,
+    entries: QuotaToastEntry[],
+    matches: (model: string) => boolean,
+  ) {
+    return {
+      id,
+      isAvailable: vi.fn().mockResolvedValue(true),
+      matchesCurrentModel: vi.fn(matches),
+      fetch: vi.fn().mockResolvedValue(result(entries)),
+    };
+  }
+
+  function createHost() {
+    return {
+      client: {
+        config: {
+          get: async () => ({ data: {} }),
+          providers: async () => ({ data: { providers: [{ id: "zai-coding-plan" }] } }),
+        },
+      },
+      roots: {
+        workspaceRoot: process.cwd(),
+        configRoot: process.cwd(),
+        fallbackDirectory: process.cwd(),
+      },
+    };
+  }
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW_MS);
+    await rm(TEST_RUNTIME_ROOT, { recursive: true, force: true });
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    await rm(TEST_RUNTIME_ROOT, { recursive: true, force: true });
+  });
+
+  async function resolve(event: QuotaRetryEvent) {
+    const { resolveQuotaResetRetryDelayMs } = await import("../src/lib/quota-retry-wait.js");
+    return resolveQuotaResetRetryDelayMs(createHost(), event);
+  }
+
+  it("waits for the used-up window of the retried model's provider only", async () => {
+    const zai = makeProvider("zai", [window("5h", 0, at(90 * MINUTE_MS))], (model) =>
+      model.includes("glm"),
+    );
+    const copilot = makeProvider(
+      "copilot",
+      [window("Monthly", 0, at(10 * MINUTE_MS))],
+      () => false,
+    );
+    mocks.getProviders.mockReturnValue([zai, copilot]);
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ waitForQuotaReset: true }));
+
+    await expect(resolve(limitEvent)).resolves.toBe(90 * MINUTE_MS + QUOTA_RESET_RETRY_BUFFER_MS);
+    expect(zai.fetch).toHaveBeenCalledTimes(1);
+    expect(copilot.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps OpenCode's decision when the setting is off", async () => {
+    const zai = makeProvider("zai", [window("5h", 0, at(90 * MINUTE_MS))], () => true);
+    mocks.getProviders.mockReturnValue([zai]);
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig());
+
+    await expect(resolve(limitEvent)).resolves.toBeUndefined();
+    expect(zai.fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps OpenCode's decision for errors that are not limits, without reading config", async () => {
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ waitForQuotaReset: true }));
+
+    await expect(
+      resolve({ ...limitEvent, error: { type: "provider.transport" } }),
+    ).resolves.toBeUndefined();
+    expect(mocks.loadConfig).not.toHaveBeenCalled();
+  });
+
+  it("keeps OpenCode's decision when the provider still has quota left", async () => {
+    const zai = makeProvider("zai", [window("5h", 12, at(90 * MINUTE_MS))], () => true);
+    mocks.getProviders.mockReturnValue([zai]);
+    mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ waitForQuotaReset: true }));
+
+    await expect(resolve(limitEvent)).resolves.toBeUndefined();
+  });
+});
