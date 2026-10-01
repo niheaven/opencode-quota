@@ -7,6 +7,7 @@ body:
     attributes:
       value: |
         Thanks for the idea. Please keep the proposal scoped and concrete.
+        v5 gets bug fixes only; feature ideas are collected for the OpenCode 2 remake.
         Review `CONTRIBUTING.md` for contribution expectations.
         Please write a short, specific title. Issues missing key details get the `needs info` label and close after 21 days without activity.
 
@@ -24,8 +25,8 @@ body:
     id: opencode_version
     attributes:
       label: OpenCode version reviewed
-      description: Example `1.2.15`
-      placeholder: 1.2.15
+      description: Example `2.0.20`
+      placeholder: 2.0.20
     validations:
       required: true
 
@@ -51,11 +52,3 @@ body:
       label: Alternatives considered
       description: Optional, but useful for tradeoffs.
 
-  - type: textarea
-    id: acceptance
-    attributes:
-      label: Acceptance criteria
-      description: "Optional: list what must be true for this request to be considered done."
-      placeholder: |
-        - [ ] ...
-        - [ ] ...

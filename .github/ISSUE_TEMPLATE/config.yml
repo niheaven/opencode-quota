@@ -3,3 +3,6 @@ contact_links:
   - name: Contribution Guidelines
     url: https://github.com/slkiser/opencode-quota/blob/main/CONTRIBUTING.md
     about: Review contribution policy, quality bar, and PR checklist.
+  - name: Track any provider yourself (custom providers)
+    url: https://github.com/slkiser/opencode-quota/blob/main/docs/readme/providers.md#custom-providers
+    about: Most providers work today as a custom provider, without waiting for a built-in.
