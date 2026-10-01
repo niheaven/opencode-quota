@@ -121,6 +121,70 @@ It asks how the provider works, previews the exact global config change, and ask
 See [Configuration](configuration.md#custom-providers) for a complete example and the other rules (pricing, state files, what is not allowed).
 
 <details>
+<summary><strong>Recipes: Vercel AI Gateway, Moonshot, Poe</strong></summary>
+
+Add the providers you use to `quotaProviders` in `quota-toast.jsonc`, then set the key variable (or use an API-key login saved in OpenCode):
+
+```jsonc
+{
+  "quotaProviders": [
+    {
+      // Vercel AI Gateway: team credit balance and total spend, in USD.
+      "id": "vercel-credits",
+      "providerId": "vercel",
+      "label": "Vercel AI Gateway",
+      "mode": "remote-api",
+      "url": "https://ai-gateway.vercel.sh/v1/credits",
+      "format": "json-v1",
+      "apiKeyEnv": "AI_GATEWAY_API_KEY",
+      "adapter": {
+        "mappings": [
+          { "resultType": "balance", "name": "Balance", "label": "Balance:", "unit": "USD", "unitPosition": "suffix", "metric": { "type": "value", "valueType": "balance", "value": { "path": ["balance"] } } },
+          { "resultType": "spend", "name": "Spend", "label": "Spend:", "unit": "USD", "unitPosition": "suffix", "metric": { "type": "value", "valueType": "spend", "value": { "path": ["total_used"] } } }
+        ]
+      }
+    },
+    {
+      // Moonshot / Kimi API platform (not Kimi Code, which is built in): available balance, in USD.
+      "id": "moonshot-balance",
+      "providerId": "moonshotai",
+      "label": "Moonshot",
+      "mode": "remote-api",
+      "url": "https://api.moonshot.ai/v1/users/me/balance",
+      "format": "json-v1",
+      "apiKeyEnv": "MOONSHOT_API_KEY",
+      "adapter": {
+        "mappings": [
+          { "resultType": "balance", "name": "Balance", "label": "Balance:", "unit": "USD", "unitPosition": "suffix", "metric": { "type": "value", "valueType": "balance", "value": { "path": ["data", "available_balance"] } } }
+        ]
+      }
+    },
+    {
+      // Poe: point balance (points, not money).
+      "id": "poe-points",
+      "providerId": "poe",
+      "label": "Poe",
+      "mode": "remote-api",
+      "url": "https://api.poe.com/usage/current_balance",
+      "format": "json-v1",
+      "apiKeyEnv": "POE_API_KEY",
+      "adapter": {
+        "mappings": [
+          { "resultType": "balance", "name": "Points", "label": "Points:", "unit": "points", "unitPosition": "suffix", "metric": { "type": "value", "valueType": "balance", "value": { "path": ["current_point_balance"] } } }
+        ]
+      }
+    }
+  ]
+}
+```
+
+- Provider docs: [Vercel AI Gateway credits](https://vercel.com/docs/ai-gateway/sdks-and-apis/rest-api#check-credit-balance), [Moonshot balance](https://platform.kimi.ai/docs/api/balance), [Poe usage API](https://creator.poe.com/docs/resources/usage-api).
+- Poe: a Poe sign-in made through OpenCode's OAuth can't be used here. Create a key at [poe.com/api/keys](https://poe.com/api/keys) and set `POE_API_KEY`.
+- These recipes follow the providers' docs and weren't tested with a real key; open an issue if one doesn't work.
+
+</details>
+
+<details>
 <summary><strong>Remote API response rules</strong></summary>
 
 `mode: "remote-api"` accepts three formats:
