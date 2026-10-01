@@ -818,6 +818,86 @@ describe("quota provider remote runtime", () => {
     expect(JSON.stringify(result)).not.toContain("provider.example");
   });
 
+  it("reads json-v1 numbers written as plain decimal text", async () => {
+    const adapter = {
+      mappings: [
+        {
+          resultType: "balance",
+          name: "Balance",
+          unit: "USD",
+          unitPosition: "suffix",
+          metric: { type: "value", valueType: "balance", value: { path: ["balance"] } },
+        },
+        {
+          resultType: "spend",
+          name: "Spend",
+          metric: {
+            type: "value",
+            valueType: "spend",
+            value: { path: ["total_used"], divideBy: 100 },
+          },
+        },
+      ],
+    } as const;
+
+    for (const [balance, totalUsed, expected] of [
+      ["95.50", "450", ["95.5 USD", "4.5"]],
+      [" -3 ", "0", ["-3 USD", "0"]],
+      ["0.25", 450, ["0.25 USD", "4.5"]],
+    ] as const) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(jsonResponse({ balance, total_used: totalUsed })),
+      );
+      const result = await fetchRemoteQuotaProvider(jsonSource(adapter), "secret");
+      expect(result).toEqual({
+        success: true,
+        entries: [
+          expect.objectContaining({ name: "JSON Source Balance", value: expected[0] }),
+          expect.objectContaining({ name: "JSON Source Spend", value: expected[1] }),
+        ],
+      });
+    }
+  });
+
+  it("rejects json-v1 text that is not a plain decimal number", async () => {
+    const adapter = {
+      mappings: [
+        {
+          resultType: "balance",
+          name: "Balance",
+          metric: { type: "value", valueType: "balance", value: { path: ["balance"] } },
+        },
+      ],
+    } as const;
+
+    for (const balance of [
+      "95.50 USD",
+      "1e3",
+      "",
+      "  ",
+      "NaN",
+      "Infinity",
+      "0x10",
+      "+5",
+      ".5",
+      "5.",
+    ]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ balance })));
+      await expect(fetchRemoteQuotaProvider(jsonSource(adapter), "secret")).resolves.toEqual({
+        success: false,
+        error: "Invalid json-v1 response: adapter.mappings[0].metric.value had wrong type at row 0",
+      });
+    }
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ balance: "1".repeat(17) })));
+    await expect(fetchRemoteQuotaProvider(jsonSource(adapter), "secret")).resolves.toEqual({
+      success: false,
+      error:
+        "Invalid json-v1 response: adapter.mappings[0].metric.value exceeded the numeric magnitude limit at row 0",
+    });
+  });
+
   it("caps detailed partial errors and adds one fixed omission summary", async () => {
     const adapter = {
       mappings: [

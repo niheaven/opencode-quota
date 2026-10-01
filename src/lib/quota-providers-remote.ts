@@ -39,6 +39,7 @@ const RESULT_TYPES = new Set<AccountingResultType>([
   "status",
 ]);
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const JSON_V1_DECIMAL_TEXT_RE = /^-?\d+(?:\.\d+)?$/;
 
 export type QuotaProviderAuthSource = "env" | "opencode.json" | "opencode.jsonc" | "opencode.db";
 
@@ -346,16 +347,18 @@ function resolveJsonV1Number(
   if (resolution.state !== "value") {
     return { ok: false, issue: jsonV1ResolutionIssue(resolution) };
   }
-  if (typeof resolution.value !== "number" || !Number.isFinite(resolution.value)) {
+  // Some APIs write numbers as text (`"95.50"`); only a plain decimal is read as a number.
+  const raw =
+    typeof resolution.value === "string" && JSON_V1_DECIMAL_TEXT_RE.test(resolution.value.trim())
+      ? Number(resolution.value.trim())
+      : resolution.value;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) {
     return { ok: false, issue: "had wrong type" };
   }
-  if (Math.abs(resolution.value) > JSON_V1_MAX_NUMBER_MAGNITUDE) {
+  if (Math.abs(raw) > JSON_V1_MAX_NUMBER_MAGNITUDE) {
     return { ok: false, issue: "exceeded the numeric magnitude limit" };
   }
-  const value =
-    "path" in source && source.divideBy !== undefined
-      ? resolution.value / source.divideBy
-      : resolution.value;
+  const value = "path" in source && source.divideBy !== undefined ? raw / source.divideBy : raw;
   return Number.isFinite(value)
     ? { ok: true, value }
     : { ok: false, issue: "did not resolve to a finite number" };
