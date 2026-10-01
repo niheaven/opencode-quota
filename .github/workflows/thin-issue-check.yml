@@ -32,21 +32,25 @@ jobs:
 
             // Title without a "[bug]:" style prefix.
             const title = issue.title.replace(/^\s*\[[^\]]*\]\s*:?/u, "").trim();
-            // Fixed answers of the version dropdowns are picked, not typed.
-            const versionAnswers = new Set([
-              "OpenCode 2 (opencode-quota 5.x)",
-              "OpenCode 1 (opencode-quota 4.x)",
-              "No, it doesn't change the display",
-              "Yes, it changes the display",
-              "Not sure",
+            // Fixed answers of the version dropdowns are picked, not typed. GitHub writes
+            // each answer as "### <label>", a blank line, then the answer, so they are
+            // ignored only on the answer line of their own dropdown, never elsewhere.
+            const dropdownAnswers = new Map([
+              [
+                "### Which OpenCode do you use?",
+                ["OpenCode 2 (opencode-quota 5.x)", "OpenCode 1 (opencode-quota 4.x)"],
+              ],
+              [
+                "### Does this change how quota is shown?",
+                ["No, it doesn't change the display", "Yes, it changes the display", "Not sure"],
+              ],
             ]);
-            // Body text the reporter typed: drop form headings, empty-field
-            // placeholders, checkbox lines, version answers, HTML comments, and whitespace.
-            const typedBody = (issue.body ?? "")
-              .replace(/<!--[\s\S]*?-->/gu, "")
-              .split("\n")
+            // Body text the reporter typed: drop dropdown answers, form headings, empty-field
+            // placeholders, checkbox lines, HTML comments, and whitespace.
+            const lines = (issue.body ?? "").replace(/<!--[\s\S]*?-->/gu, "").split("\n");
+            const typedBody = lines
+              .filter((line, index) => !dropdownAnswers.get(lines[index - 2]?.trim())?.includes(line.trim()))
               .filter((line) => !/^\s*(###\s|_No response_|- \[[ xX]\]\s)/u.test(line))
-              .filter((line) => !versionAnswers.has(line.trim()))
               .join("")
               .replace(/\s+/gu, "");
             const thin = title.length < 8 || typedBody.length < 40;

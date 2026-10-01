@@ -174,6 +174,34 @@ describe("GitHub workflows", () => {
     ).resolves.toEqual([]);
   });
 
+  it("counts a typed dropdown answer outside its own dropdown in the thin issue check", async () => {
+    // 43 typed characters without spaces; dropping the typed "Not sure" leaves 36 (< 40).
+    const body = formBody([
+      ["Does this change how quota is shown?", "Not sure"],
+      ["OpenCode version reviewed", "2.0.20"],
+      ["Problem statement", "Quota retries stop."],
+      ["Proposed change", "Wait for reset."],
+      ["Alternatives considered", "Not sure"],
+    ]);
+    await expect(
+      runIssueScript("check", { title: "Retries stop at the limit", body }),
+    ).resolves.toEqual([]);
+
+    // The dropdown's own "Not sure" still does not count.
+    await expect(
+      runIssueScript("check", {
+        title: "Retries stop at the limit",
+        body: body.replace(
+          "Alternatives considered\n\nNot sure",
+          "Alternatives considered\n\n_No response_",
+        ),
+      }),
+    ).resolves.toEqual([
+      { method: "addLabels", labels: ["needs info"] },
+      { method: "createComment" },
+    ]);
+  });
+
   it("asks which OpenCode and whether the display changes right after the pre-flight checks", async () => {
     const bug = parse(await readFile(".github/ISSUE_TEMPLATE/bug_report.yml", "utf8")) as {
       body: Array<{ id?: string; attributes: { label?: string; options?: unknown[] } }>;
