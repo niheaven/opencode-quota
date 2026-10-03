@@ -1,4 +1,5 @@
 import { stat } from "fs/promises";
+import { homedir } from "os";
 import { getProviders } from "../providers/registry.js";
 import { interpretAccountingRow } from "./accounting-format.js";
 import {
@@ -18,6 +19,7 @@ import type {
   QuotaToastEntry,
   QuotaToastError,
 } from "./entries.js";
+import { replaceHomeDirWithTildeInDocument } from "./home-dir-display.js";
 import type { MaintainerAnnouncementsSummary } from "./maintainer-announcements.js";
 import {
   getPricingRefreshPolicy,
@@ -703,6 +705,8 @@ type QuotaStatusReportParams = {
     summary: MaintainerAnnouncementsSummary;
   };
   generatedAtMs?: number;
+  /** The home dir the report shows as "~"; defaults to the computer's (tests set it). */
+  homeDir?: string;
 };
 
 export async function buildQuotaStatusReport(params: QuotaStatusReportParams): Promise<string> {
@@ -1128,12 +1132,17 @@ export async function buildQuotaStatusReportDocument(
   }
   sections.push(createKvSection("unknown_pricing", "unknown_pricing:", unknownRows));
 
-  return {
-    heading: commandHeading({
-      title: `Quota Status (opencode-quota v${v}) (/quota_status)`,
-      detail: `opencode-quota v${v}`,
-      generatedAtMs: params.generatedAtMs,
-    }),
-    sections,
-  };
+  // Users paste this report into public issues: show the home dir as "~" in every path
+  // so it does not reveal their computer's user name.
+  return replaceHomeDirWithTildeInDocument(
+    {
+      heading: commandHeading({
+        title: `Quota Status (opencode-quota v${v}) (/quota_status)`,
+        detail: `opencode-quota v${v}`,
+        generatedAtMs: params.generatedAtMs,
+      }),
+      sections,
+    },
+    params.homeDir ?? homedir(),
+  );
 }

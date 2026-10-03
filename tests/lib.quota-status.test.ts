@@ -190,6 +190,31 @@ describe("buildQuotaStatusReport", () => {
     });
   });
 
+  it("shows the home dir as ~ in every report path, but not in lookalike or outside paths", async () => {
+    const { buildQuotaStatusReportDocument } = await import("../src/lib/quota-status.js");
+    const params = makeQuotaStatusReportParams({
+      homeDir: "/tmp",
+      configPaths: ["/tmp/config/opencode.json", "/tmpfoo/opencode.json", "/var/opencode.json"],
+      runtimeRoots: { workspaceRoot: "/tmp/project", configRoot: "/tmp" },
+    });
+
+    const report = await buildQuotaStatusReportForTest(params);
+    const document = await buildQuotaStatusReportDocument(params);
+
+    expect(report).toContain(
+      "- configPaths: ~/config/opencode.json | /tmpfoo/opencode.json | /var/opencode.json",
+    );
+    expect(report).toContain("- workspace_root: ~/project");
+    expect(report).toContain("- config_root: ~\n");
+    expect(report).toContain("data=~/data config=~/config cache=~/cache state=~/state");
+    expect(report).toContain("path=~/opencode.db present=false");
+    expect(report).toContain(
+      "snapshot=~/pricing-snapshot.json refresh_state=~/pricing-refresh-state.json",
+    );
+    expect(report).not.toMatch(/(^|[\s=|(])\/tmp([/\s]|$)/mu);
+    expect(JSON.stringify(document)).not.toMatch(/[\s=|("]\/tmp[/\s"]/u);
+  });
+
   it("uses a Unicode ellipsis for truncated pricing diagnostic lists", async () => {
     const tokens = { input: 1, output: 0, reasoning: 0, cache_read: 0, cache_write: 0 };
     const unpriced = Array.from({ length: 7 }, (_, index) => ({
