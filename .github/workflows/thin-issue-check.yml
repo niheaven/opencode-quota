@@ -38,11 +38,11 @@ jobs:
             const dropdownAnswers = new Map([
               [
                 "### Which OpenCode do you use?",
-                ["OpenCode 2 (opencode-quota 5.x)", "OpenCode 1 (opencode-quota 4.x)"],
+                ["OpenCode 2", "OpenCode 1"],
               ],
               [
-                "### Does this change how quota is shown?",
-                ["No, it doesn't change the display", "Yes, it changes the display", "Not sure"],
+                "### Does this change what you see on screen?",
+                ["No", "Yes", "Not sure"],
               ],
             ]);
             // Body text the reporter typed: drop dropdown answers, form headings, empty-field
@@ -96,10 +96,10 @@ jobs:
             };
 
             const labels = [];
-            if (answer("Which OpenCode do you use?") === "OpenCode 1 (opencode-quota 4.x)") {
+            if (answer("Which OpenCode do you use?") === "OpenCode 1") {
               labels.push("v4");
             }
-            if (answer("Does this change how quota is shown?") === "Yes, it changes the display") {
+            if (answer("Does this change what you see on screen?") === "Yes") {
               labels.push("v6");
             }
 

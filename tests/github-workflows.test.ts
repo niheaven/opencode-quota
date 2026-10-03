@@ -111,8 +111,8 @@ describe("GitHub workflows", () => {
 
     const title = "Sidebar shows a window twice";
     const v4Body = formBody([
-      ["Which OpenCode do you use?", "OpenCode 1 (opencode-quota 4.x)"],
-      ["Bug summary", LONG_SUMMARY],
+      ["Which OpenCode do you use?", "OpenCode 1"],
+      ["What went wrong?", LONG_SUMMARY],
     ]);
     await expect(runIssueScript("version-labels", { title, body: v4Body })).resolves.toEqual([
       { method: "addLabels", labels: ["v4"] },
@@ -124,17 +124,17 @@ describe("GitHub workflows", () => {
       runIssueScript("version-labels", {
         title,
         body: formBody([
-          ["Does this change how quota is shown?", "Yes, it changes the display"],
-          ["Problem statement", LONG_SUMMARY],
+          ["Does this change what you see on screen?", "Yes"],
+          ["What's the problem?", LONG_SUMMARY],
         ]),
       }),
     ).resolves.toEqual([{ method: "addLabels", labels: ["v6"] }]);
 
     for (const body of [
-      formBody([["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"]]),
-      formBody([["Does this change how quota is shown?", "No, it doesn't change the display"]]),
-      formBody([["Does this change how quota is shown?", "Not sure"]]),
-      formBody([["Bug summary", "OpenCode 1 (opencode-quota 4.x)"]]),
+      formBody([["Which OpenCode do you use?", "OpenCode 2"]]),
+      formBody([["Does this change what you see on screen?", "No"]]),
+      formBody([["Does this change what you see on screen?", "Not sure"]]),
+      formBody([["What went wrong?", "OpenCode 1"]]),
       "",
     ]) {
       await expect(runIssueScript("version-labels", { title, body })).resolves.toEqual([]);
@@ -146,7 +146,7 @@ describe("GitHub workflows", () => {
     await expect(
       runIssueScript("version-labels", {
         title,
-        body: formBody([["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"]]),
+        body: formBody([["Which OpenCode do you use?", "OpenCode 2"]]),
         labels: ["v4", "v6"],
       }),
     ).resolves.toEqual([]);
@@ -154,9 +154,9 @@ describe("GitHub workflows", () => {
 
   it("does not count the version dropdown answers as typed text in the thin issue check", async () => {
     const thinBody = formBody([
-      ["Which OpenCode do you use?", "OpenCode 1 (opencode-quota 4.x)"],
-      ["Does this change how quota is shown?", "No, it doesn't change the display"],
-      ["Bug summary", "broken"],
+      ["Which OpenCode do you use?", "OpenCode 1"],
+      ["Does this change what you see on screen?", "No"],
+      ["What went wrong?", "broken"],
     ]);
     await expect(
       runIssueScript("check", { title: "Sidebar shows a window twice", body: thinBody }),
@@ -166,8 +166,8 @@ describe("GitHub workflows", () => {
     ]);
 
     const fullBody = formBody([
-      ["Which OpenCode do you use?", "OpenCode 2 (opencode-quota 5.x)"],
-      ["Bug summary", LONG_SUMMARY],
+      ["Which OpenCode do you use?", "OpenCode 2"],
+      ["What went wrong?", LONG_SUMMARY],
     ]);
     await expect(
       runIssueScript("check", { title: "Sidebar shows a window twice", body: fullBody }),
@@ -177,11 +177,11 @@ describe("GitHub workflows", () => {
   it("counts a typed dropdown answer outside its own dropdown in the thin issue check", async () => {
     // 43 typed characters without spaces; dropping the typed "Not sure" leaves 36 (< 40).
     const body = formBody([
-      ["Does this change how quota is shown?", "Not sure"],
-      ["OpenCode version reviewed", "2.0.20"],
-      ["Problem statement", "Quota retries stop."],
-      ["Proposed change", "Wait for reset."],
-      ["Alternatives considered", "Not sure"],
+      ["Does this change what you see on screen?", "Not sure"],
+      ["OpenCode version", "2.0.20"],
+      ["What's the problem?", "Quota retries stop."],
+      ["What would you like to happen?", "Wait for reset."],
+      ["Other ideas you thought about (optional)", "Not sure"],
     ]);
     await expect(
       runIssueScript("check", { title: "Retries stop at the limit", body }),
@@ -192,8 +192,8 @@ describe("GitHub workflows", () => {
       runIssueScript("check", {
         title: "Retries stop at the limit",
         body: body.replace(
-          "Alternatives considered\n\nNot sure",
-          "Alternatives considered\n\n_No response_",
+          "Other ideas you thought about (optional)\n\nNot sure",
+          "Other ideas you thought about (optional)\n\n_No response_",
         ),
       }),
     ).resolves.toEqual([
@@ -202,7 +202,7 @@ describe("GitHub workflows", () => {
     ]);
   });
 
-  it("asks which OpenCode and whether the display changes right after the pre-flight checks", async () => {
+  it("asks which OpenCode and whether the display changes right after the checkboxes", async () => {
     const bug = parse(await readFile(".github/ISSUE_TEMPLATE/bug_report.yml", "utf8")) as {
       body: Array<{ id?: string; attributes: { label?: string; options?: unknown[] } }>;
     };
@@ -216,7 +216,7 @@ describe("GitHub workflows", () => {
       id: "opencode_line",
       attributes: {
         label: "Which OpenCode do you use?",
-        options: ["OpenCode 2 (opencode-quota 5.x)", "OpenCode 1 (opencode-quota 4.x)"],
+        options: ["OpenCode 2", "OpenCode 1"],
       },
       validations: { required: true },
     });
@@ -225,8 +225,8 @@ describe("GitHub workflows", () => {
       type: "dropdown",
       id: "display_change",
       attributes: {
-        label: "Does this change how quota is shown?",
-        options: ["No, it doesn't change the display", "Yes, it changes the display", "Not sure"],
+        label: "Does this change what you see on screen?",
+        options: ["No", "Yes", "Not sure"],
       },
       validations: { required: true },
     });
