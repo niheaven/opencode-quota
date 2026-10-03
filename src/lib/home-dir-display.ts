@@ -53,10 +53,10 @@ export function replaceHomeDirWithTilde(text: string, homeDir: string): string {
   return replaceWholeHomeDir(withoutEscapedHome, home);
 }
 
+// Optional fields are only set when the input has them. An optional field set to `undefined`
+// is not a JSON value, and OpenCode rejects a command result that contains one.
 function replaceHomeDirInBlock(block: ReportBlock, homeDir: string): ReportBlock {
   const tilde = (text: string) => replaceHomeDirWithTilde(text, homeDir);
-  const tildeOptional = (text: string | undefined) =>
-    text === undefined ? undefined : tilde(text);
 
   switch (block.kind) {
     case "lines":
@@ -67,14 +67,14 @@ function replaceHomeDirInBlock(block: ReportBlock, homeDir: string): ReportBlock
         rows: block.rows.map((row) => ({
           ...row,
           key: tilde(row.key),
-          value: tildeOptional(row.value),
+          ...(row.value !== undefined && { value: tilde(row.value) }),
         })),
       };
     case "table":
       return {
         ...block,
         headers: block.headers.map(tilde),
-        fullHeaders: block.fullHeaders?.map(tilde),
+        ...(block.fullHeaders !== undefined && { fullHeaders: block.fullHeaders.map(tilde) }),
         rows: block.rows.map((row) => row.map(tilde)),
       };
     case "quota":
@@ -86,8 +86,8 @@ function replaceHomeDirInBlock(block: ReportBlock, homeDir: string): ReportBlock
           ...row,
           label: tilde(row.label),
           value: tilde(row.value),
-          usage: tildeOptional(row.usage),
-          reset: tildeOptional(row.reset),
+          ...(row.usage !== undefined && { usage: tilde(row.usage) }),
+          ...(row.reset !== undefined && { reset: tilde(row.reset) }),
           notes: row.notes.map(tilde),
         })),
       };
@@ -99,23 +99,21 @@ export function replaceHomeDirWithTildeInDocument(
   document: ReportDocument,
   homeDir: string,
 ): ReportDocument {
-  const heading = document.heading
-    ? {
-        line: replaceHomeDirWithTilde(document.heading.line, homeDir),
-        subtitle:
-          document.heading.subtitle === undefined
-            ? undefined
-            : replaceHomeDirWithTilde(document.heading.subtitle, homeDir),
-      }
-    : undefined;
+  const tilde = (text: string) => replaceHomeDirWithTilde(text, homeDir);
+  const heading = document.heading;
 
   return {
     ...document,
-    heading,
+    ...(heading !== undefined && {
+      heading: {
+        ...heading,
+        line: tilde(heading.line),
+        ...(heading.subtitle !== undefined && { subtitle: tilde(heading.subtitle) }),
+      },
+    }),
     sections: document.sections.map((section) => ({
       ...section,
-      title:
-        section.title === undefined ? undefined : replaceHomeDirWithTilde(section.title, homeDir),
+      ...(section.title !== undefined && { title: tilde(section.title) }),
       blocks: section.blocks.map((block) => replaceHomeDirInBlock(block, homeDir)),
     })),
   };

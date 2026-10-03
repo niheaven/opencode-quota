@@ -155,4 +155,30 @@ describe("replaceHomeDirWithTildeInDocument", () => {
       ],
     });
   });
+
+  it("keeps the document a plain JSON value, with no optional field set to undefined", () => {
+    // OpenCode only accepts JSON values in a command result; an `undefined` field is rejected.
+    const document: ReportDocument = {
+      sections: [
+        {
+          id: "s",
+          blocks: [
+            { kind: "kv", rows: [{ key: "/Users/alice/a" }] },
+            { kind: "table", headers: ["path"], rows: [["/Users/alice/b"]], aligns: ["left"] },
+            {
+              kind: "quota",
+              provider: "p",
+              percentMode: "remaining",
+              lines: [],
+              rows: [{ label: "l", value: "/Users/alice/c", notes: [] }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = replaceHomeDirWithTildeInDocument(document, HOME);
+    expect(result).toStrictEqual(JSON.parse(JSON.stringify(result)));
+    expect(JSON.stringify(result)).not.toContain("alice");
+  });
 });
