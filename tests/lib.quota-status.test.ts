@@ -215,6 +215,45 @@ describe("buildQuotaStatusReport", () => {
     expect(JSON.stringify(document)).not.toMatch(/[\s=|("]\/tmp[/\s"]/u);
   });
 
+  it("shows a JSON-quoted Windows command under a home with a space as ~", async () => {
+    const quotedCommand = `${JSON.stringify("C:\\Users\\Alice Smith\\.local\\bin\\claude")} --version`;
+    const report = await buildProviderStatusReport("anthropic", {
+      homeDir: "C:\\Users\\Alice Smith",
+      providerLiveProbes: [
+        makeProviderSuccessProbe("anthropic", {
+          checked_commands: `claude --version | ${quotedCommand}`,
+        }),
+      ],
+    });
+
+    expect(getReportSection(report, "anthropic:")).toContain(
+      '- checked_commands: claude --version | "~\\\\.local\\\\bin\\\\claude" --version',
+    );
+    expect(report).not.toContain("Alice");
+  });
+
+  it("shows the home dir as ~ before cutting a long live row", async () => {
+    const report = await buildProviderStatusReport("openrouter", {
+      homeDir: "/Users/alice",
+      providerLiveProbes: [
+        makeProviderSuccessProbe(
+          "openrouter",
+          {},
+          {
+            errors: [
+              { label: "OpenRouter", message: `${"x".repeat(109)} /Users/alice/token.json` },
+            ],
+          },
+        ),
+      ],
+    });
+
+    expect(getReportSection(report, "openrouter:")).toContain(
+      `- live_error_1: ${"x".repeat(109)} ~/token.js\n`,
+    );
+    expect(report).not.toContain("/Users/ali");
+  });
+
   it("uses a Unicode ellipsis for truncated pricing diagnostic lists", async () => {
     const tokens = { input: 1, output: 0, reasoning: 0, cache_read: 0, cache_write: 0 };
     const unpriced = Array.from({ length: 7 }, (_, index) => ({

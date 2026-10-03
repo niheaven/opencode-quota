@@ -8,18 +8,14 @@ import {
   type QuotaToastSettingSources,
 } from "./config.js";
 import type { RuntimeContextRoots } from "./config-file-utils.js";
-import {
-  sanitizeQuotaProviderResult,
-  sanitizeSingleLineDisplaySnippet,
-  sanitizeSingleLineDisplayText,
-} from "./display-sanitize.js";
+import { sanitizeQuotaProviderResult, sanitizeSingleLineDisplayText } from "./display-sanitize.js";
 import type {
   QuotaProviderDiagnostic,
   QuotaProviderResult,
   QuotaToastEntry,
   QuotaToastError,
 } from "./entries.js";
-import { replaceHomeDirWithTildeInDocument } from "./home-dir-display.js";
+import { replaceHomeDirWithTilde, replaceHomeDirWithTildeInDocument } from "./home-dir-display.js";
 import type { MaintainerAnnouncementsSummary } from "./maintainer-announcements.js";
 import {
   getPricingRefreshPolicy,
@@ -223,10 +219,11 @@ function appendProviderCompactLiveProbeRows(
   providerId: string,
   probes: ProviderLiveProbe[] | undefined,
   availability: ProviderAvailability[],
+  homeDir: string,
 ): void {
   const provider = availability.find((item) => item.id === providerId);
   if (!provider?.enabled || !provider.available) return;
-  appendCompactLiveProbeRows(rows, providerId, findProviderLiveProbe(providerId, probes));
+  appendCompactLiveProbeRows(rows, providerId, findProviderLiveProbe(providerId, probes), homeDir);
 }
 
 function createCompactLiveProbeOnlySection(params: {
@@ -235,6 +232,7 @@ function createCompactLiveProbeOnlySection(params: {
   providerId: string;
   probes?: ProviderLiveProbe[];
   availability: ProviderAvailability[];
+  homeDir: string;
 }): ReportSection | null {
   const provider = params.availability.find((item) => item.id === params.providerId);
   if (!provider?.enabled || !provider.available) return null;
@@ -244,7 +242,7 @@ function createCompactLiveProbeOnlySection(params: {
   }
 
   const rows: ReportKvRow[] = [];
-  appendCompactLiveProbeRows(rows, params.providerId, probe);
+  appendCompactLiveProbeRows(rows, params.providerId, probe, params.homeDir);
   return createKvSection(params.id, params.title, rows);
 }
 
@@ -256,12 +254,19 @@ function createProviderStatusSection(params: {
   availability: ProviderAvailability[];
   includeDetails?: boolean;
   detailKeys?: ReadonlySet<string>;
+  homeDir: string;
 }): ReportSection {
   const rows: ReportKvRow[] = [];
   if (params.includeDetails !== false) {
     appendProviderStatusDetailRows(rows, params.providerId, params.probes, params.detailKeys);
   }
-  appendProviderCompactLiveProbeRows(rows, params.providerId, params.probes, params.availability);
+  appendProviderCompactLiveProbeRows(
+    rows,
+    params.providerId,
+    params.probes,
+    params.availability,
+    params.homeDir,
+  );
   return createKvSection(params.id, params.title, rows);
 }
 
@@ -286,7 +291,22 @@ function getCompactLiveProbeDescriptor(
   return undefined;
 }
 
-function formatCompactLiveProbeEntry(providerId: string, entry: QuotaToastEntry): string {
+/**
+ * One live probe row, cut to its length limit. The home dir becomes "~" before the cut, so a
+ * cut inside a home path cannot leave part of the user name (e.g. "/Users/ali").
+ */
+function shortenLiveRowText(text: string, homeDir: string): string {
+  return replaceHomeDirWithTilde(sanitizeSingleLineDisplayText(text), homeDir).slice(
+    0,
+    STATUS_LIVE_ROW_MAX_LENGTH,
+  );
+}
+
+function formatCompactLiveProbeEntry(
+  providerId: string,
+  entry: QuotaToastEntry,
+  homeDir: string,
+): string {
   const interpretation = interpretAccountingRow(entry, { booleanWording: "semantic" });
   const parts: string[] = [];
   const descriptor = getCompactLiveProbeDescriptor(providerId, entry, interpretation.label);
@@ -314,18 +334,19 @@ function formatCompactLiveProbeEntry(providerId: string, entry: QuotaToastEntry)
     parts.push(`reset_at=${sanitizeSingleLineDisplayText(entry.resetTimeIso)}`);
   }
 
-  return sanitizeSingleLineDisplaySnippet(parts.join(" "), STATUS_LIVE_ROW_MAX_LENGTH);
+  return shortenLiveRowText(parts.join(" "), homeDir);
 }
 
-function formatCompactLiveProbeError(providerId: string, error: QuotaToastError): string {
+function formatCompactLiveProbeError(
+  providerId: string,
+  error: QuotaToastError,
+  homeDir: string,
+): string {
   const label = isRedundantLiveProbeDescriptor(providerId, error.label)
     ? ""
     : sanitizeSingleLineDisplayText(error.label);
   const message = sanitizeSingleLineDisplayText(error.message);
-  return sanitizeSingleLineDisplaySnippet(
-    label ? `${label}: ${message}` : message,
-    STATUS_LIVE_ROW_MAX_LENGTH,
-  );
+  return shortenLiveRowText(label ? `${label}: ${message}` : message, homeDir);
 }
 
 function getQuotaProviderCredentialCategory(
@@ -450,7 +471,8 @@ function createQuotaProvidersSection(params: {
 function appendCompactLiveProbeRows(
   rows: ReportKvRow[],
   providerId: string,
-  probe?: ProviderLiveProbe,
+  probe: ProviderLiveProbe | undefined,
+  homeDir: string,
 ): void {
   if (!probe) return;
 
@@ -471,14 +493,14 @@ function appendCompactLiveProbeRows(
   for (let index = 0; index < entryCount; index += 1) {
     rows.push({
       key: `live_entry_${index + 1}`,
-      value: formatCompactLiveProbeEntry(providerId, result.entries[index]!),
+      value: formatCompactLiveProbeEntry(providerId, result.entries[index]!, homeDir),
     });
   }
 
   for (let index = 0; index < errorCount; index += 1) {
     rows.push({
       key: `live_error_${index + 1}`,
-      value: formatCompactLiveProbeError(providerId, result.errors[index]!),
+      value: formatCompactLiveProbeError(providerId, result.errors[index]!, homeDir),
     });
   }
 
@@ -716,6 +738,7 @@ export async function buildQuotaStatusReport(params: QuotaStatusReportParams): P
 export async function buildQuotaStatusReportDocument(
   params: QuotaStatusReportParams,
 ): Promise<ReportDocument> {
+  const homeDir = params.homeDir ?? homedir();
   const version = await getPackageVersion();
   const v = version ?? "unknown";
   const modelDisplay = params.currentModel
@@ -848,6 +871,7 @@ export async function buildQuotaStatusReportDocument(
         providerId,
         probes: params.providerLiveProbes,
         availability: params.providerAvailability,
+        homeDir,
       }),
     );
   }
@@ -867,6 +891,7 @@ export async function buildQuotaStatusReportDocument(
     "cursor",
     params.providerLiveProbes,
     params.providerAvailability,
+    homeDir,
   );
   sections.push(createKvSection("cursor", "cursor:", cursorRows));
 
@@ -876,6 +901,7 @@ export async function buildQuotaStatusReportDocument(
     providerId: "alibaba-coding-plan",
     probes: params.providerLiveProbes,
     availability: params.providerAvailability,
+    homeDir,
   });
   if (alibabaCodingPlanLiveProbeSection) {
     sections.push(alibabaCodingPlanLiveProbeSection);
@@ -887,6 +913,7 @@ export async function buildQuotaStatusReportDocument(
     providerId: "alibaba-token-plan",
     probes: params.providerLiveProbes,
     availability: params.providerAvailability,
+    homeDir,
   });
   if (alibabaTokenPlanLiveProbeSection) {
     sections.push(alibabaTokenPlanLiveProbeSection);
@@ -928,6 +955,7 @@ export async function buildQuotaStatusReportDocument(
         ...section,
         probes: params.providerLiveProbes,
         availability: params.providerAvailability,
+        homeDir,
       }),
     );
   }
@@ -940,6 +968,7 @@ export async function buildQuotaStatusReportDocument(
         providerId: "kilo",
         probes: params.providerLiveProbes,
         availability: params.providerAvailability,
+        homeDir,
       }),
     );
   }
@@ -955,6 +984,7 @@ export async function buildQuotaStatusReportDocument(
         providerId,
         probes: params.providerLiveProbes,
         availability: params.providerAvailability,
+        homeDir,
       }),
     );
   }
@@ -1143,6 +1173,6 @@ export async function buildQuotaStatusReportDocument(
       }),
       sections,
     },
-    params.homeDir ?? homedir(),
+    homeDir,
   );
 }

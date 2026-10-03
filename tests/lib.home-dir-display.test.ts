@@ -46,6 +46,31 @@ describe("replaceHomeDirWithTilde", () => {
     );
   });
 
+  it("leaves a home-like folder deeper inside another path alone, including non-ASCII", () => {
+    expect(replaceHomeDirWithTilde("/mnt/备份/Users/alice/project", HOME)).toBe(
+      "/mnt/备份/Users/alice/project",
+    );
+    expect(replaceHomeDirWithTilde("/mnt/backup-/Users/alice/project", HOME)).toBe(
+      "/mnt/backup-/Users/alice/project",
+    );
+  });
+
+  it("replaces home after the delimiters the report puts before paths", () => {
+    expect(
+      replaceHomeDirWithTilde(
+        "a=/Users/alice/1 (/Users/alice/2) [/Users/alice/3] '/Users/alice/4' `/Users/alice/5` x:/Users/alice/6,/Users/alice/7",
+        HOME,
+      ),
+    ).toBe("a=~/1 (~/2) [~/3] '~/4' `~/5` x:~/6,~/7");
+  });
+
+  it("treats a space after home as the end of the home path (known trade-off)", () => {
+    expect(replaceHomeDirWithTilde("not found at /Users/alice is missing", HOME)).toBe(
+      "not found at ~ is missing",
+    );
+    expect(replaceHomeDirWithTilde("/Users/alice backup/project", HOME)).toBe("~ backup/project");
+  });
+
   it("ignores a trailing separator on the home dir", () => {
     expect(replaceHomeDirWithTilde("/home/bob/.config", "/home/bob/")).toBe("~/.config");
   });
@@ -59,6 +84,13 @@ describe("replaceHomeDirWithTilde", () => {
     ).toBe("path=~\\.local\\share\\opencode\\opencode.db");
     expect(replaceHomeDirWithTilde("C:\\Users\\alicesmith\\x", "C:\\Users\\alice")).toBe(
       "C:\\Users\\alicesmith\\x",
+    );
+  });
+
+  it("handles a JSON-escaped Windows home (doubled backslashes)", () => {
+    const quoted = JSON.stringify("C:\\Users\\Alice Smith\\.local\\bin\\claude");
+    expect(replaceHomeDirWithTilde(`${quoted} --version`, "C:\\Users\\Alice Smith")).toBe(
+      '"~\\\\.local\\\\bin\\\\claude" --version',
     );
   });
 
