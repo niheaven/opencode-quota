@@ -1,5 +1,12 @@
 export declare const CURSOR_API_HOST = "api2.cursor.sh";
 export declare const CURSOR_WEBSITE_HOST = "cursor.com";
+/**
+ * Production OAuth client id Cursor's IDE sends on `POST /oauth/token`
+ * (Cursor 3.17.19 `workbench.desktop.main.js`, `cursorCreds.authClientId` for
+ * `backendUrl` `https://api2.cursor.sh`). The IDE's non-production id is not
+ * used: a custom `CURSOR_API_BASE_URL` keeps this one.
+ */
+export declare const CURSOR_OAUTH_CLIENT_ID = "KbZUR41cY7W6zRSdpSUJ7I7mLYBKOCmB";
 export declare const FALLBACK_CLIENT_VERSION = "cli-2026.07.09-a3815c0";
 export declare const CURSOR_PROVIDER_ID = "cursor";
 /** Private provider option injected by the OpenCode plugin for summary turns. */

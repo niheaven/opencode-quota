@@ -1,7 +1,3 @@
-export type CollectedRule = {
-    fullPath: string;
-    content: string;
-};
 export type OpencodeJson = {
     instructions?: string[];
     permission?: unknown;
@@ -9,18 +5,10 @@ export type OpencodeJson = {
     plugins?: string[];
     mcp?: Record<string, unknown>;
 };
-export declare function findGitWorktree(start: string): Promise<string>;
 /** Same truthy rule as OpenCode's Flag.OPENCODE_DISABLE_PROJECT_CONFIG. */
 export declare function isProjectConfigDisabled(): boolean;
-/** Fetch a remote instruction with one deadline covering headers and body. */
-export declare function fetchRemoteInstruction(url: string, timeoutMs?: number): Promise<string | undefined>;
-export declare function loadMergedConfig(workspaceRoot: string): Promise<OpencodeJson>;
 /**
- * Collect OpenCode instruction files.
- * `preloadedConfig` reuses a merged config already loaded on this Run.
+ * Merged `opencode.json` / `opencode.jsonc` for MCP server ids, plugin lists,
+ * and interaction guidance. Instruction file bodies are not collected here.
  */
-export declare function collectRules(workspaceRoot: string, preloadedConfig?: OpencodeJson): Promise<{
-    rules: CollectedRule[];
-    config: OpencodeJson;
-    worktree: string;
-}>;
+export declare function loadMergedConfig(workspaceRoot: string): Promise<OpencodeJson>;

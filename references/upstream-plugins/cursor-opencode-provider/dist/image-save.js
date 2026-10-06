@@ -8,7 +8,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { trace } from "./debug.js";
+import { errorMessage, trace } from "./debug.js";
 import { takePendingCursorImage } from "./image-staging.js";
 /**
  * Marks a refusal that must reach Cursor as `WriteResult.permission_denied`
@@ -150,7 +150,7 @@ export async function executeCursorImageSave(args, ctx) {
         });
     }
     catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorMessage(error);
         trace(`image save: permission refused path=${JSON.stringify(contained.path)} reason=${reason}`);
         throw new Error(`${IMAGE_PERMISSION_DENIED_PREFIX} ${reason}`);
     }
@@ -165,7 +165,7 @@ export async function executeCursorImageSave(args, ctx) {
     catch (error) {
         // Most often something already occupies a path component (EEXIST/ENOTDIR).
         // Say which path is blocked; the raw errno alone tells the model nothing.
-        const reason = error instanceof Error ? error.message : String(error);
+        const reason = errorMessage(error);
         trace(`image save: write failed path=${JSON.stringify(contained.path)} reason=${reason}`);
         throw new Error(`Could not save the generated image to ${contained.path}: ${reason}. `
             + `Check that ${directory} is a writable directory.`);

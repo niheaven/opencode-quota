@@ -11,6 +11,8 @@ export type PersistedConversation = {
     postCompactionRebase: boolean;
     hostAgent?: string;
     systemPromptHash?: string;
+    /** JSON-encoded TurnProvenance (what this provider emitted last). */
+    turnProvenance?: string;
 };
 export type ConversationLoadStatus = "restored" | "missing" | "invalid" | "expired";
 export type PersistedConversationLoad = {

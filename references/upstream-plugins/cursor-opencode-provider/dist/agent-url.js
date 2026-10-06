@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { fetchAgentUrl } from "./transport/connect.js";
-import { trace } from "./debug.js";
+import { errorMessage, trace } from "./debug.js";
 import { CURSOR_API_HOST } from "./shared.js";
 const DEFAULT_API_BASE = `https://${CURSOR_API_HOST}`;
 // In-process memo of the region-specific Run stream origin (agentnUrl). Resolved
@@ -59,7 +59,7 @@ export async function resolveAgentUrl(token, options = {}) {
             return url;
         }
         catch (err) {
-            const reason = err instanceof Error ? err.message : String(err);
+            const reason = errorMessage(err);
             trace(`agent-url: GetServerConfig failed (${reason}); no fallback agent host will be used`);
             throw err;
         }

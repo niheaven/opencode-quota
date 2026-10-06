@@ -1062,9 +1062,27 @@ export function createMessageTypes() {
         { id: 20, name: "is_working_dir_home_dir", type: "bool" },
         { id: 21, name: "process_working_directory", type: "string" },
     ]);
+    // Cursor applies a rule by its type: `global` is the CLI's `alwaysApply: true`
+    // (its AGENTS.md / CLAUDE.md default). An untyped rule is only attachable on
+    // request, so its content never reaches the model on its own.
+    addType(root, "CursorRuleTypeGlobal", []);
+    addType(root, "CursorRuleTypeFileGlobs", [
+        { id: 1, name: "globs", type: "string", repeated: true },
+    ]);
+    addType(root, "CursorRuleTypeAgentFetched", [
+        { id: 1, name: "description", type: "string" },
+    ]);
+    addType(root, "CursorRuleTypeManuallyAttached", []);
+    addType(root, "CursorRuleType", [
+        { id: 1, name: "global", type: "CursorRuleTypeGlobal" },
+        { id: 2, name: "file_globbed", type: "CursorRuleTypeFileGlobs" },
+        { id: 3, name: "agent_fetched", type: "CursorRuleTypeAgentFetched" },
+        { id: 4, name: "manually_attached", type: "CursorRuleTypeManuallyAttached" },
+    ], [{ name: "type", fields: ["global", "file_globbed", "agent_fetched", "manually_attached"] }]);
     addType(root, "CursorRule", [
         { id: 1, name: "full_path", type: "string" },
         { id: 2, name: "content", type: "string" },
+        { id: 3, name: "type", type: "CursorRuleType" },
     ]);
     addType(root, "RepositoryIndexingInfo", [
         { id: 1, name: "relative_workspace_path", type: "string" },
@@ -1151,8 +1169,8 @@ export function createMessageTypes() {
         { id: 1, name: "success", type: "RequestContextSuccess" },
     ]);
     // Cursor probes MCP server availability before emitting an MCP-backed tool
-    // call. OpenCode owns those servers, so answer from the descriptors already
-    // advertised in RequestContext rather than surfacing this as a user tool.
+    // call. OpenCode owns those servers, so answer from the live host catalog
+    // rather than surfacing this as a user tool.
     addType(root, "McpStateExecArgs", [
         { id: 1, name: "server_identifiers", type: "string", repeated: true },
         { id: 2, name: "kick_only", type: "bool" },
@@ -1334,8 +1352,8 @@ export function createMessageTypes() {
         { id: 2, name: "message_id", type: "string" },
         { id: 3, name: "selected_context", type: "SelectedContext" },
     ]);
-    // RequestContext — UserMessageAction #2. Live per-turn tools go here
-    // (AgentRunRequest.mcp_tools #4 is prewarm-only / empty on real turns).
+    // RequestContext — UserMessageAction #2. Slim mcp_meta_tool_options names
+    // the advertised catalog; AgentRunRequest.mcp_tools (#4) is empty on real turns.
     addType(root, "RequestContext", [
         { id: 2, name: "rules", type: "CursorRule", repeated: true },
         { id: 4, name: "env", type: "RequestContextEnv" },

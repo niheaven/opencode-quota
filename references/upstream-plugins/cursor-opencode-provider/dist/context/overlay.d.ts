@@ -1,5 +1,5 @@
 /**
- * Epoch-hold live RequestContext overlay lists (skills, subagents, plugins).
+ * Epoch-hold live RequestContext overlay lists (subagents, plugins).
  *
  * Same policy as the tool catalog: first nonempty freeze is UTF-16 by id,
  * equal ids keep frozen bytes (including content), new ids append at the
@@ -7,12 +7,6 @@
  * Run; this only canonicalizes what is advertised.
  */
 export declare const MAX_OVERLAY_HOLDS = 256;
-export type OverlaySkill = {
-    id: string;
-    full_path: string;
-    content: string;
-    description: string;
-};
 export type OverlaySubagent = {
     full_path: string;
     name: string;
@@ -24,26 +18,11 @@ export type OverlayPlugin = {
     line: string;
 };
 export type OverlayHold = {
-    skills: OverlaySkill[];
-    subagents: OverlaySubagent[];
-    plugins: OverlayPlugin[];
-};
-export type OverlayWire = {
-    skills: Array<{
-        full_path: string;
-        content: string;
-        description: string;
-    }>;
     subagents: OverlaySubagent[];
     plugins: OverlayPlugin[];
 };
 /** Merge live discovery into the conversation overlay epoch. */
-export declare function holdCapabilityOverlay(conversationId: string, live: OverlayHold): OverlayWire;
-/**
- * Epoch-held skills with their OpenCode ids. The wire shape drops `id`
- * (`AgentSkill` has no name field), but the host `skill` tool needs it.
- */
-export declare function getHeldOverlaySkills(conversationId: string): OverlaySkill[];
+export declare function holdCapabilityOverlay(conversationId: string, live: OverlayHold): OverlayHold;
 export declare function clearOverlayHold(conversationId: string): void;
 export declare function transferOverlayHold(previousConversationId: string, nextConversationId: string): void;
 export declare function resetOverlayHoldsForTests(): void;

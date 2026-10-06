@@ -5,6 +5,7 @@ import { cursorContextUsageMetadata, type CursorContextUsageSource, type CursorC
 import { type ConversationBlobGraphStats } from "./protocol/blob-store.js";
 import { type CursorSession } from "./session.js";
 import { CursorProviderError } from "./errors.js";
+import { type ModelInfo } from "./models.js";
 import type { SeedHistoryMessage } from "./protocol/request.js";
 type PromptIdentity = {
     hostAgent?: string;
@@ -21,6 +22,13 @@ export declare const MAX_CHECKPOINT_BLOB_GRAPH_BYTES: number;
 export declare function checkpointBlobGraphRequiresRebase(_stats: ConversationBlobGraphStats, _maxBytes?: number): boolean;
 /** Warn-only concern for incomplete / oversized checkpoint graphs (no remint). */
 export declare function checkpointBlobGraphConcern(stats: ConversationBlobGraphStats, maxBytes?: number): "incomplete-checkpoint-graph" | "oversized-checkpoint-graph" | undefined;
+/**
+ * True when the raw frame holds exactly one control message: a KV request, a
+ * checkpoint update, or an interaction update that is only a heartbeat. Extra
+ * fields inside a KV request are tolerated (Cursor has sent them live); extra
+ * top-level fields are not.
+ */
+export declare function isSoleControlFrame(payload: Uint8Array): boolean;
 export type CursorRetryPolicy = {
     maxAttempts: number;
     baseDelayMs: number;
@@ -50,9 +58,17 @@ export declare function pumpWithRecovery(input: {
     recover: (recovery: CursorRunRecovery) => Promise<CursorSession>;
     onSession?: (session: CursorSession) => void;
     maxRecoveries?: number;
+    /**
+     * Set when the credential source can renew: called once per turn after
+     * Cursor rejects the token (401 / unauthenticated) before the attempt did
+     * anything, so the reopened Run uses a force-renewed token. This retry does
+     * not count against the transient-failure budget.
+     */
+    renewRejectedCredential?: () => void;
 }): Promise<CursorSession>;
 export type CursorRunRecovery = {
     kind: "rebase";
+    reason?: "checkpoint-unusable";
 } | {
     kind: "resume";
     conversationId: string;
@@ -145,18 +161,12 @@ type ExtractedToolResult = {
     output: string;
     error?: string;
 };
-/**
- * Tool results that form a live continuation: only the trailing run of `tool`
- * messages after the last non-tool message. Mid-prompt historical tool results
- * are ignored — they are conversation history, not replies for a held-open Run.
- */
 export declare function extractTrailingToolResults(prompt: LanguageModelV3CallOptions["prompt"]): ExtractedToolResult[];
 /** Detect a host-owned canonical plan review, excluding Cursor exec replies. */
 export declare function hasApprovedUncorrelatedPlanStageResult(prompt: LanguageModelV3CallOptions["prompt"]): boolean;
 /**
- * Checkpointed Runs do not resend the system prompt. Keep the workspace root
- * on the live user message, and require absolute `path` arguments when that is
- * the host's file-tool dialect.
+ * Keep the workspace root on a checkpointed turn's live user message too, and
+ * require absolute `path` arguments when that is the host's file-tool dialect.
  */
 export declare function groundCheckpointTurnText(userText: string, checkpoint: boolean, workspaceRoot: string, tools: readonly {
     name?: string;
@@ -196,6 +206,21 @@ export declare function extractPromptHistory(prompt: LanguageModelV3CallOptions[
     preserveTrailingUser?: boolean;
     toolResults?: "omit" | "all" | "trailing";
 }): SeedHistoryMessage[];
+/** Share of the target context a foreign-history rebase may fill before compaction. */
+export declare const FOREIGN_HISTORY_REBASE_CONTEXT_SHARE = 0.8;
+/**
+ * A foreign-history rebase replays the full host history. When that cannot fit,
+ * fail before opening a Run with an error hosts classify as context overflow
+ * (HTTP 413 + "prompt is too long"), so the host compacts and retries.
+ */
+export declare function assertForeignHistoryRebaseFits(input: {
+    modelInfo: ModelInfo | undefined;
+    cursorModelId: string;
+    maxMode: boolean;
+    history: SeedHistoryMessage[];
+    systemPrompt: string | undefined;
+    userText: string;
+}): void;
 /** OpenCode session id header, if present. */
 export declare function opencodeSessionKey(callOptions: LanguageModelV3CallOptions): string | undefined;
 /**
@@ -205,6 +230,14 @@ export declare function opencodeSessionKey(callOptions: LanguageModelV3CallOptio
  */
 export declare function resolveConversationId(callOptions: LanguageModelV3CallOptions): string;
 export { sessionIdToUuid } from "./protocol/conversation-bind.js";
+/**
+ * Grow the held Run's advertised + permitted catalog from this `doStream`
+ * call. Continuation skips `startSession`, so without this, exec #36 and
+ * permission keep the freeze from Run open. MCP server ids stay those of the
+ * Run's one merged-config load (`startSession`); a tool that connects later
+ * still gets its identity from that set.
+ */
+export declare function refreshHeldSessionToolCatalog(session: CursorSession, callOptions: LanguageModelV3CallOptions): Promise<void>;
 /** Exported for tests — AI SDK V3 span ends that must precede finish / tool-call. */
 export declare function spanEndParts(opts: {
     textStarted: boolean;

@@ -1,5 +1,5 @@
 /**
- * Epoch-hold live RequestContext overlay lists (skills, subagents, plugins).
+ * Epoch-hold live RequestContext overlay lists (subagents, plugins).
  *
  * Same policy as the tool catalog: first nonempty freeze is UTF-16 by id,
  * equal ids keep frozen bytes (including content), new ids append at the
@@ -29,7 +29,6 @@ function holdList(cached, incoming, idOf) {
 }
 function remember(conversationId, hold) {
     const stored = {
-        skills: structuredClone(hold.skills),
         subagents: structuredClone(hold.subagents),
         plugins: structuredClone(hold.plugins),
     };
@@ -43,47 +42,24 @@ function remember(conversationId, hold) {
     }
     return stored;
 }
-function skillId(skill) {
-    return skill.id || skill.full_path;
-}
-function toWire(hold) {
-    return {
-        skills: hold.skills.map(({ full_path, content, description }) => ({
-            full_path,
-            content,
-            description,
-        })),
-        subagents: hold.subagents,
-        plugins: hold.plugins,
-    };
-}
 /** Merge live discovery into the conversation overlay epoch. */
 export function holdCapabilityOverlay(conversationId, live) {
     if (!conversationId) {
-        return toWire({
-            skills: inFixedOrder(live.skills, skillId),
+        return {
             subagents: inFixedOrder(live.subagents, (agent) => agent.name),
             plugins: inFixedOrder(live.plugins, (plugin) => plugin.id),
-        });
+        };
     }
     const cached = byConversationId.get(conversationId);
     const next = {
-        skills: holdList(cached?.skills, live.skills, skillId),
         subagents: holdList(cached?.subagents, live.subagents, (agent) => agent.name),
         plugins: holdList(cached?.plugins, live.plugins, (plugin) => plugin.id),
     };
-    if (next.skills.length === 0 && next.subagents.length === 0 && next.plugins.length === 0) {
+    if (next.subagents.length === 0 && next.plugins.length === 0) {
         byConversationId.delete(conversationId);
-        return toWire(next);
+        return next;
     }
-    return toWire(remember(conversationId, next));
-}
-/**
- * Epoch-held skills with their OpenCode ids. The wire shape drops `id`
- * (`AgentSkill` has no name field), but the host `skill` tool needs it.
- */
-export function getHeldOverlaySkills(conversationId) {
-    return structuredClone(byConversationId.get(conversationId)?.skills ?? []);
+    return remember(conversationId, next);
 }
 export function clearOverlayHold(conversationId) {
     byConversationId.delete(conversationId);

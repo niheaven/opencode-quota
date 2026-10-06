@@ -7,7 +7,7 @@ import { sessionActivity } from "./activity.js";
 import { fetchOpenCodeWebSearchText, parseExaWebSearchResults, } from "./web-tools.js";
 import { captureCursorShellResult, cursorShellEnvForCommand, prepareCursorShellArgs, releaseCursorShellEnv, sanitizeRegisteredCursorShellOutput, } from "./shell-timeout.js";
 import { applyCursorProviderInventory, CURSOR_INTEGRATION_ID } from "./opencode2/catalog.js";
-import { applyCursorIntegration, resolveCursorAccessToken } from "./opencode2/integration.js";
+import { applyCursorIntegration, requireCursorAccessToken, resolveCursorAccessToken, } from "./opencode2/integration.js";
 import { exposeDirectMcpTools, rememberDirectMcpNamespaces } from "./opencode2/mcp-direct.js";
 import { registerTodoTools } from "./opencode2/todo-tools.js";
 import { OPENCODE_2_TOOL_DIALECT } from "./protocol/tools.js";
@@ -140,26 +140,20 @@ const plugin = {
         let sourceConnection;
         // ── Credentials ─────────────────────────────────────────
         await track(ctx.integration.transform(applyCursorIntegration));
-        let cachedToken;
         let tokenInflight;
         /**
-         * Cache only a *successful* resolution.
+         * Current token for model discovery and endpoint warmup, or undefined.
          *
-         * On a fresh install `setup()` runs before the user has connected, so the
-         * first attempt necessarily returns nothing. Memoizing that would pin the
-         * plugin to "no credentials" for the whole process and models would never
-         * load, even after a successful /connect.
+         * Resolved every time (concurrent callers share one attempt) and never
+         * memoized: on a fresh install `setup()` runs before the user has
+         * connected, and a long-running daemon outlives any single token. Both
+         * the host resolve and the renewal layer are cheap until a renewal is due.
          */
         const accessToken = async () => {
-            if (cachedToken)
-                return cachedToken;
             tokenInflight ??= resolveCursorAccessToken(ctx.integration).finally(() => {
                 tokenInflight = undefined;
             });
-            const token = await tokenInflight;
-            if (token)
-                cachedToken = token;
-            return token;
+            return tokenInflight;
         };
         const refreshSourceConnection = async () => {
             try {
@@ -210,10 +204,11 @@ const plugin = {
                 return;
             if (!isCursorPackage(event.package, event.model.providerID))
                 return;
-            const token = await accessToken();
             event.sdk = createSdk({
                 name: event.model.providerID || CURSOR_PROVIDER_ID,
-                ...(token ? { accessToken: token } : {}),
+                // Resolved per Run open: this SDK lives as long as the daemon, so
+                // a token captured here would outlive its expiry.
+                getAccessToken: (request) => requireCursorAccessToken(ctx.integration, request),
                 // Static fallback only. This hook fires once per model/package, not
                 // per session, and 2.0 runs one daemon across many projects — the
                 // real per-request directory comes from `x-opencode-directory`
@@ -467,7 +462,6 @@ const plugin = {
         retry.unref?.();
         void ensureModels().catch(() => { });
         const onCredentialSwitch = () => {
-            cachedToken = undefined;
             modelsLoaded = false;
             credentialGeneration++;
         };

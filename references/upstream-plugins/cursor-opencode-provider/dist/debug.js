@@ -18,6 +18,10 @@ let _traceInitialized = false;
 let _debugFile;
 let _debugFileUsesManagedDirectory = false;
 let _announcedLogPath = false;
+/** Message of an unknown thrown value, for log lines and error text. */
+export function errorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
+}
 /** Whether `CURSOR_PROVIDER_DEBUG` is enabled for this process. */
 export function isDebugEnabled() {
     return DEBUG_ENABLED;

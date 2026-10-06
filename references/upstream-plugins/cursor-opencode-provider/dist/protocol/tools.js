@@ -132,7 +132,9 @@ export function resolveToolServerIdentity(opencodeName, defaultServer = "opencod
 }
 /**
  * Convert opencode's per-turn tool list into Cursor `McpToolDefinition`
- * entries for `request_context.tools` (#7) and `AgentRunRequest.mcp_tools`.
+ * entries for session exec remap / bridges. These are not sent on
+ * RequestContext.tools (#7) or AgentRunRequest.mcp_tools (both omitted/empty
+ * on the wire). Exec #36 still uses the same identity fields.
  *
  * Builtins and unknown plugin/custom tools are advertised under the synthetic
  * default server (`opencode`). Tools whose prefixes match configured MCP
@@ -249,15 +251,15 @@ export function resolveCustomWebToolAlias(toolName, aliases) {
     return toolName;
 }
 /**
- * Build the nested McpFileSystemOptions / McpMetaToolOptions shape used by
- * requestContext.#23 / #34. One `McpDescriptor` per resolved server (builtins
- * and unknown tools under the synthetic default; configured MCP tools under
- * their upstream server id).
+ * Nested MCP descriptors. Full name/description/schema is for exec #36.
+ * RequestContext `mcp_meta_tool_options` uses `{ namesOnly: true }` (`tool_name`
+ * only). File-system `mcp_descriptors` are omitted on the wire.
  */
-export function toolsToMcpDescriptors(tools, providerIdentifier = "opencode", knownMcpServers = []) {
+export function toolsToMcpDescriptors(tools, providerIdentifier = "opencode", knownMcpServers = [], options) {
     if (tools.length === 0)
         return [];
     const byServer = new Map();
+    const namesOnly = options?.namesOnly === true;
     // Walk advertised order: first-seen server, then append tools onto that
     // server. Same-set host reorder is resolved by `resolveTurnToolState`
     // before encode so this walk stays epoch-stable.
@@ -268,11 +270,14 @@ export function toolsToMcpDescriptors(tools, providerIdentifier = "opencode", kn
             list = [];
             byServer.set(id.server, list);
         }
-        list.push({
-            tool_name: t.sourceName ? t.name : id.toolName,
-            description: t.description ?? "",
-            input_schema: encodeJsonAsValue(normalizeInputSchema(t.inputSchema)),
-        });
+        const toolName = t.sourceName ? t.name : id.toolName;
+        list.push(namesOnly
+            ? { tool_name: toolName }
+            : {
+                tool_name: toolName,
+                description: t.description ?? "",
+                input_schema: encodeJsonAsValue(normalizeInputSchema(t.inputSchema)),
+            });
     }
     return [...byServer.keys()].map((server) => ({
         server_name: server,
@@ -285,20 +290,17 @@ export function toolsToMcpDescriptors(tools, providerIdentifier = "opencode", kn
  * Kept as a sync tools-only fallback for unit tests that don't need collectors.
  */
 export function buildLiveRequestContext(tools, providerIdentifier = "opencode", knownMcpServers = []) {
-    const flat = toolsToDescriptors(tools, providerIdentifier, knownMcpServers);
-    const nested = toolsToMcpDescriptors(tools, providerIdentifier, knownMcpServers);
+    const slim = toolsToMcpDescriptors(tools, providerIdentifier, knownMcpServers, { namesOnly: true });
     const cwd = process.cwd();
     const ctx = {
         env: buildEnv(cwd),
-        tools: flat,
         mcp_file_system_options: {
             enabled: true,
             workspace_project_dir: ensureOpencodeProjectDir(cwd),
-            mcp_descriptors: nested,
         },
         mcp_meta_tool_options: {
             enabled: true,
-            mcp_descriptors: nested,
+            ...(slim.length > 0 ? { mcp_descriptors: slim } : {}),
         },
         web_search_enabled: false,
         web_fetch_enabled: false,
@@ -3196,65 +3198,51 @@ export function buildRequestContextResult(execId, requestContext) {
     });
 }
 /**
- * Answer Cursor's exec #36 MCP-state probe from the same descriptors advertised
- * in RequestContext. OpenCode remains the executor; this only confirms that the
- * provider's virtual MCP servers and their tools are available.
+ * Answer Cursor's exec #36 MCP-state probe from the session's live tool
+ * descriptors: `toolsToDescriptors` output for the advertised catalog (after
+ * web-tool aliasing), refreshed on every `doStream`. These are the same
+ * identities the names-only RequestContext advertises and exec remap uses, so
+ * Cursor's native get_mcp_tools can correlate the later
+ * provider_identifier/tool_name request. OpenCode remains the executor; this
+ * only confirms those tools are available, with full name/description/schema.
  */
-export function buildMcpStateResult(execId, args, requestContext) {
+export function buildMcpStateResult(execId, args, toolDescriptors) {
     const requested = new Set(Array.isArray(args.server_identifiers)
         ? args.server_identifiers.filter((id) => typeof id === "string" && id.length > 0)
         : []);
-    const fsOptions = recordValue(requestContext.mcp_file_system_options);
-    const nested = Array.isArray(fsOptions?.mcp_descriptors)
-        ? fsOptions.mcp_descriptors.map(recordValue).filter((d) => !!d)
-        : [];
-    const descriptors = nested.length > 0 ? nested : descriptorsFromFlatTools(requestContext.tools);
-    const flatTools = Array.isArray(requestContext.tools)
-        ? requestContext.tools.map(recordValue).filter((tool) => !!tool)
-        : [];
-    const servers = descriptors
-        .filter((descriptor) => {
-        const id = stringValue(descriptor.server_identifier);
-        return requested.size === 0 || (id !== undefined && requested.has(id));
-    })
-        .map((descriptor) => {
-        const serverIdentifier = stringValue(descriptor.server_identifier) ?? stringValue(descriptor.server_name) ?? "";
-        const tools = Array.isArray(descriptor.tools)
-            ? descriptor.tools
-                .map(recordValue)
-                .filter((tool) => !!tool)
-                .map((tool) => mcpStateToolDefinition(serverIdentifier, tool, flatTools))
-            : [];
-        return {
-            server_name: stringValue(descriptor.server_name) ?? serverIdentifier,
-            server_identifier: serverIdentifier,
-            tools,
-        };
-    });
+    // Group in advertised order: first-seen server, then its tools.
+    const byServer = new Map();
+    for (const tool of toolDescriptors) {
+        const server = stringValue(tool.provider_identifier);
+        const toolName = stringValue(tool.tool_name);
+        if (!server || !toolName)
+            continue;
+        if (requested.size > 0 && !requested.has(server))
+            continue;
+        let list = byServer.get(server);
+        if (!list) {
+            list = [];
+            byServer.set(server, list);
+        }
+        list.push({
+            name: stringValue(tool.name) ?? `${server}-${toolName}`,
+            description: stringValue(tool.description) ?? "",
+            input_schema: tool.input_schema,
+            provider_identifier: server,
+            tool_name: toolName,
+        });
+    }
+    const servers = [...byServer].map(([server, tools]) => ({
+        server_name: server,
+        server_identifier: server,
+        tools,
+    }));
     return encodeMessage("AgentClientMessage", {
         exec_client_message: {
             id: execId,
             mcp_state_exec_result: { success: { servers } },
         },
     });
-}
-/**
- * Exec #36 uses McpToolDefinition, not the narrower McpToolDescriptor used by
- * RequestContext's filesystem/meta-tool catalogs. Rehydrate the full identity
- * from RequestContext.tools so Cursor's native get_mcp_tools can correlate the
- * discovered definition with the later provider_identifier/tool_name request.
- */
-function mcpStateToolDefinition(serverIdentifier, descriptor, flatTools) {
-    const toolName = stringValue(descriptor.tool_name) ?? "";
-    const advertised = flatTools.find((tool) => stringValue(tool.provider_identifier) === serverIdentifier
-        && stringValue(tool.tool_name) === toolName);
-    return {
-        name: stringValue(advertised?.name) ?? `${serverIdentifier}-${toolName}`,
-        description: stringValue(advertised?.description) ?? stringValue(descriptor.description) ?? "",
-        input_schema: advertised?.input_schema ?? descriptor.input_schema,
-        provider_identifier: serverIdentifier,
-        tool_name: toolName,
-    };
 }
 /**
  * Total fallback for Cursor's native MCP-resource exec channel (agent.v1
@@ -3284,32 +3272,4 @@ export function buildReadMcpResourceFallback(execId, server, uri) {
             },
         },
     });
-}
-function recordValue(value) {
-    return value && typeof value === "object" && !Array.isArray(value)
-        ? value
-        : undefined;
-}
-function descriptorsFromFlatTools(value) {
-    if (!Array.isArray(value))
-        return [];
-    const byServer = new Map();
-    for (const raw of value) {
-        const tool = recordValue(raw);
-        if (!tool)
-            continue;
-        const server = stringValue(tool.provider_identifier) ?? "opencode";
-        const tools = byServer.get(server) ?? [];
-        tools.push({
-            tool_name: stringValue(tool.tool_name) ?? stringValue(tool.name) ?? "",
-            description: stringValue(tool.description) ?? "",
-            input_schema: tool.input_schema,
-        });
-        byServer.set(server, tools);
-    }
-    return [...byServer].map(([server, tools]) => ({
-        server_name: server,
-        server_identifier: server,
-        tools,
-    }));
 }

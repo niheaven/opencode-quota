@@ -17,6 +17,12 @@ export declare class CursorProviderError extends Error {
     readonly origin: CursorErrorOrigin;
     readonly transient: boolean;
     replaySafe: boolean;
+    /**
+     * The Run failed because Cursor could not restore the resumed checkpoint
+     * (it requested blobs this client does not hold) before producing anything.
+     * Recovery must reseed a new conversation instead of resuming that checkpoint.
+     */
+    checkpointUnusable?: boolean;
     readonly statusCode?: number;
     readonly grpcStatus?: number | string;
     readonly rstCode?: number;
@@ -41,8 +47,15 @@ export declare class CursorProtocolError extends CursorProviderError {
 export declare class CursorAuthError extends CursorProviderError {
     constructor(message?: string, options?: Partial<CursorErrorDiagnostics> & {
         cause?: unknown;
+        replaySafe?: boolean;
     });
 }
+/**
+ * Cursor refused the request's credential (HTTP 401 / gRPC unauthenticated),
+ * as opposed to refusing the account an action (403 / permission_denied).
+ * Only this case is worth one renewed-token retry.
+ */
+export declare function isRejectedCredentialError(error: unknown): error is CursorAuthError;
 /**
  * OpenCode's SessionRetry treats several substrings in provider error messages
  * as always-retryable — notably bare "unavailable" and "exhausted", plus a

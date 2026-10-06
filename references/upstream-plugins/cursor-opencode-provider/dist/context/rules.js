@@ -1,7 +1,6 @@
-import { readFile, readdir, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { opencodeConfigFileNames, opencodeGlobalConfigDirs, opencodeProjectConfigDirs, resolveHomeRelative } from "./paths.js";
+import { opencodeConfigFileNames, opencodeGlobalConfigDirs, opencodeProjectConfigDirs } from "./paths.js";
 async function exists(file) {
     try {
         await stat(file);
@@ -18,7 +17,10 @@ async function readJsonConfig(dir) {
             continue;
         try {
             const raw = await readFile(file, "utf-8");
-            const stripped = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+            // Match strings first so comment markers inside URLs/plugin specifiers
+            // survive. Remove comments before trailing commas (which may precede one).
+            const uncommented = raw.replace(/"(?:\\.|[^"\\])*"|\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, token => token.startsWith('"') ? token : " ");
+            const stripped = uncommented.replace(/"(?:\\.|[^"\\])*"|,\s*(?=[}\]])/g, token => token.startsWith('"') ? token : "");
             return JSON.parse(stripped);
         }
         catch {
@@ -27,130 +29,10 @@ async function readJsonConfig(dir) {
     }
     return {};
 }
-export async function findGitWorktree(start) {
-    let dir = path.resolve(start);
-    for (;;) {
-        if (await exists(path.join(dir, ".git")))
-            return dir;
-        const parent = path.dirname(dir);
-        if (parent === dir)
-            return path.resolve(start);
-        dir = parent;
-    }
-}
-async function findUp(name, start, stop) {
-    let dir = path.resolve(start);
-    const root = path.resolve(stop);
-    for (;;) {
-        const candidate = path.join(dir, name);
-        if (await exists(candidate))
-            return candidate;
-        if (dir === root)
-            return undefined;
-        const parent = path.dirname(dir);
-        if (parent === dir)
-            return undefined;
-        dir = parent;
-    }
-}
-async function readRule(file) {
-    if (!(await exists(file)))
-        return undefined;
-    try {
-        const content = await readFile(file, "utf-8");
-        if (!content.trim())
-            return undefined;
-        return { fullPath: path.resolve(file), content };
-    }
-    catch {
-        return undefined;
-    }
-}
-function globToRegExp(glob) {
-    const norm = glob.replace(/\\/g, "/");
-    let re = "^";
-    for (let i = 0; i < norm.length; i++) {
-        const c = norm[i];
-        if (c === "*") {
-            if (norm[i + 1] === "*") {
-                re += ".*";
-                i++;
-                if (norm[i + 1] === "/")
-                    i++;
-            }
-            else {
-                re += "[^/]*";
-            }
-        }
-        else if (".$^+?()[]{}|".includes(c) || c === "\\") {
-            re += "\\" + c;
-        }
-        else {
-            re += c;
-        }
-    }
-    return new RegExp(re + "$");
-}
-async function expandGlob(pattern, workspaceRoot) {
-    const abs = path.isAbsolute(pattern) ? pattern : path.join(workspaceRoot, pattern);
-    if (!abs.includes("*"))
-        return (await exists(abs)) ? [abs] : [];
-    const out = [];
-    const base = abs.split("*")[0] || workspaceRoot;
-    const startDir = path.dirname(base.endsWith("/") ? base : base);
-    const regex = globToRegExp(abs);
-    async function walk(dir, depth) {
-        if (depth > 8)
-            return;
-        let entries;
-        try {
-            entries = await readdir(dir);
-        }
-        catch {
-            return;
-        }
-        entries.sort();
-        for (const name of entries) {
-            if (name === "node_modules" || name === ".git")
-                continue;
-            const full = path.join(dir, name);
-            let st;
-            try {
-                st = await stat(full);
-            }
-            catch {
-                continue;
-            }
-            if (st.isDirectory())
-                await walk(full, depth + 1);
-            else if (regex.test(full.replace(/\\/g, "/")))
-                out.push(full);
-        }
-    }
-    await walk(startDir, 0);
-    return out;
-}
 /** Same truthy rule as OpenCode's Flag.OPENCODE_DISABLE_PROJECT_CONFIG. */
 export function isProjectConfigDisabled() {
     const value = process.env.OPENCODE_DISABLE_PROJECT_CONFIG?.toLowerCase();
     return value === "true" || value === "1";
-}
-/** Fetch a remote instruction with one deadline covering headers and body. */
-export async function fetchRemoteInstruction(url, timeoutMs = 5000) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), Math.max(1, timeoutMs));
-    try {
-        const res = await fetch(url, { signal: ctrl.signal });
-        if (!res.ok)
-            return undefined;
-        return await res.text();
-    }
-    catch {
-        return undefined;
-    }
-    finally {
-        clearTimeout(timer);
-    }
 }
 function mergeConfig(base, overlay) {
     return {
@@ -163,6 +45,10 @@ function mergeConfig(base, overlay) {
         permission: overlay.permission ?? base.permission,
     };
 }
+/**
+ * Merged `opencode.json` / `opencode.jsonc` for MCP server ids, plugin lists,
+ * and interaction guidance. Instruction file bodies are not collected here.
+ */
 export async function loadMergedConfig(workspaceRoot) {
     const globalConfig = await readJsonConfig(opencodeGlobalConfigDirs()[0] ?? "");
     if (isProjectConfigDisabled())
@@ -175,66 +61,4 @@ export async function loadMergedConfig(workspaceRoot) {
         projectConfig = mergeConfig(projectConfig, await readJsonConfig(configDir));
     }
     return mergeConfig(globalConfig, projectConfig);
-}
-/**
- * Collect OpenCode instruction files.
- * `preloadedConfig` reuses a merged config already loaded on this Run.
- */
-export async function collectRules(workspaceRoot, preloadedConfig) {
-    const worktree = await findGitWorktree(workspaceRoot);
-    const rules = [];
-    const seen = new Set();
-    const config = preloadedConfig ?? await loadMergedConfig(workspaceRoot);
-    const add = async (file) => {
-        if (!file)
-            return;
-        const resolved = path.resolve(file);
-        if (seen.has(resolved))
-            return;
-        const rule = await readRule(resolved);
-        if (!rule)
-            return;
-        seen.add(resolved);
-        rules.push(rule);
-    };
-    // Match OpenCode: OPENCODE_DISABLE_PROJECT_CONFIG skips project AGENTS/CLAUDE/CONTEXT
-    // discovery and project opencode.json (see loadMergedConfig).
-    if (!isProjectConfigDisabled()) {
-        for (const name of ["AGENTS.md", "CLAUDE.md", "CONTEXT.md"]) {
-            const hit = await findUp(name, workspaceRoot, worktree);
-            if (hit) {
-                await add(hit);
-                break;
-            }
-        }
-    }
-    for (const globalDir of opencodeGlobalConfigDirs()) {
-        await add(path.join(globalDir, "AGENTS.md"));
-    }
-    await add(path.join(homedir(), ".claude", "CLAUDE.md"));
-    for (const raw of config.instructions ?? []) {
-        if (raw.startsWith("http://") || raw.startsWith("https://")) {
-            // HTTPS-only. Redirects (incl. to a local proxy) are intentional — do not
-            // disable follow-redirects or reject localhost/private/metadata hosts.
-            let remoteUrl;
-            try {
-                remoteUrl = new URL(raw);
-            }
-            catch {
-                continue;
-            }
-            if (remoteUrl.protocol !== "https:")
-                continue;
-            const content = await fetchRemoteInstruction(remoteUrl.href);
-            if (!content?.trim() || seen.has(raw))
-                continue;
-            seen.add(raw);
-            rules.push({ fullPath: raw, content });
-            continue;
-        }
-        const expanded = resolveHomeRelative(raw);
-        for (const m of await expandGlob(expanded, workspaceRoot))
-            await add(m);
-    }
-    return { rules, config, worktree };
 }

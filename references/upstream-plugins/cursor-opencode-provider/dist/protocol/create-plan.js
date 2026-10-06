@@ -21,6 +21,7 @@ import { pathToFileURL } from "node:url";
 import { hostPlansDir } from "../context/paths.js";
 import { parseAnswerSegments, } from "./ask-question.js";
 import { decodeMessageSparse } from "./messages.js";
+import { errorMessage } from "../debug.js";
 const PLAN_ADJECTIVES = [
     "brave",
     "calm",
@@ -344,7 +345,7 @@ export function writeOpencodePlanFile(args, workspaceRoot, created = Date.now())
         writeFileSync(planPath, markdown, "utf-8");
     }
     catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = errorMessage(err);
         return { ok: false, error: `Failed to write plan file: ${message}` };
     }
     return {

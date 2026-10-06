@@ -3,6 +3,12 @@ export class CursorProviderError extends Error {
     origin;
     transient;
     replaySafe;
+    /**
+     * The Run failed because Cursor could not restore the resumed checkpoint
+     * (it requested blobs this client does not hold) before producing anything.
+     * Recovery must reseed a new conversation instead of resuming that checkpoint.
+     */
+    checkpointUnusable;
     statusCode;
     grpcStatus;
     rstCode;
@@ -64,10 +70,26 @@ export class CursorAuthError extends CursorProviderError {
             ...options,
             origin: "auth",
             transient: false,
-            replaySafe: false,
+            replaySafe: options.replaySafe ?? false,
         });
         this.name = "CursorAuthError";
     }
+}
+function isUnauthenticatedStatus(status) {
+    if (status === undefined)
+        return false;
+    const normalized = String(status).toLowerCase().replaceAll("-", "_");
+    return normalized === "16" || normalized === "unauthenticated";
+}
+/**
+ * Cursor refused the request's credential (HTTP 401 / gRPC unauthenticated),
+ * as opposed to refusing the account an action (403 / permission_denied).
+ * Only this case is worth one renewed-token retry.
+ */
+export function isRejectedCredentialError(error) {
+    return error instanceof CursorAuthError && (error.statusCode === 401 ||
+        isUnauthenticatedStatus(error.grpcStatus) ||
+        isUnauthenticatedStatus(error.code));
 }
 /**
  * OpenCode's SessionRetry treats several substrings in provider error messages
@@ -141,7 +163,9 @@ export function isAuthGrpcStatus(status) {
 }
 export function cursorHttpError(operation, statusCode, diagnostics = {}) {
     if (statusCode === 401 || statusCode === 403) {
-        return new CursorAuthError(`Cursor authentication failed (HTTP ${statusCode}); reauthenticate with Cursor`, { ...diagnostics, statusCode });
+        // A rejected credential means the server did no work: replaying with a
+        // renewed token is safe unless the attempt already crossed a barrier.
+        return new CursorAuthError(`Cursor authentication failed (HTTP ${statusCode}); reauthenticate with Cursor`, { ...diagnostics, statusCode, replaySafe: statusCode === 401 });
     }
     return new CursorServerError(`${operation} HTTP ${statusCode}`, {
         ...diagnostics,
@@ -152,7 +176,7 @@ export function cursorHttpError(operation, statusCode, diagnostics = {}) {
 }
 export function cursorGrpcError(operation, grpcStatus, diagnostics = {}) {
     if (isAuthGrpcStatus(grpcStatus)) {
-        return new CursorAuthError(`Cursor authentication failed (gRPC ${grpcStatus}); reauthenticate with Cursor`, { ...diagnostics, grpcStatus });
+        return new CursorAuthError(`Cursor authentication failed (gRPC ${grpcStatus}); reauthenticate with Cursor`, { ...diagnostics, grpcStatus, replaySafe: isUnauthenticatedStatus(grpcStatus) });
     }
     return new CursorServerError(`${operation} gRPC status ${grpcStatus}`, {
         ...diagnostics,

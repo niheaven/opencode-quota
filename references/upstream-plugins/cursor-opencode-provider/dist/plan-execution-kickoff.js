@@ -11,7 +11,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { trace } from "./debug.js";
+import { errorMessage, trace } from "./debug.js";
 /** Upstream `PlanExitTool` wording — keep verbatim so behaviour matches OpenCode. */
 export function createPlanExecutionKickoffText(planPath) {
     const where = planPath.trim() || "the plan";
@@ -149,7 +149,7 @@ export async function flushPlanExecutionKickoff(sessionID, options = {}) {
         return true;
     }
     catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = errorMessage(error);
         const message = `The approved plan could not start execution: ${detail}. ` +
             "The plan remains active and can be retried.";
         state.status = "failed";

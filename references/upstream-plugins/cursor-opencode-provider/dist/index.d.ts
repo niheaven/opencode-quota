@@ -1,6 +1,7 @@
 import { CursorPlugin } from "./plugin.js";
 import type { CursorContinuationOptions } from "./session.js";
 import type { HostToolDialect } from "./protocol/tools.js";
+import type { AccessTokenProvider } from "./auth-renewal.js";
 export type CursorRetryOptions = {
     /** Total attempts including the initial request. Default: 3. */
     maxAttempts?: number;
@@ -11,7 +12,16 @@ export type CursorRetryOptions = {
 };
 export type CreateCursorOptions = {
     name: string;
+    /**
+     * Current Cursor access token, asked for every time a Run opens. Takes
+     * precedence over `accessToken` and `apiKey`; hosts use it to renew the
+     * login without exposing a secret in serializable options. `forceRefresh`
+     * is set once after Cursor rejected the previous token.
+     */
+    getAccessToken?: AccessTokenProvider;
+    /** Access token sent as-is (no renewal). Used when `getAccessToken` is absent. */
     accessToken?: string;
+    /** Raw `crsr_` API key, exchanged and renewed. Used only when neither of the above is given. */
     apiKey?: string;
     /** API base for auth, model discovery, and GetServerConfig. */
     apiBaseURL?: string;

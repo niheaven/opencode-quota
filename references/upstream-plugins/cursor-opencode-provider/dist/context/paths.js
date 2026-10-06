@@ -68,9 +68,18 @@ export function getHostCacheDirOverride() {
 export function resolveHostCacheDir(env = process.env) {
     return bridgeGlobalCacheDir() ?? openCodeGlobalCacheDir(env);
 }
-/** Native OpenCode global config dir. */
-export function opencodeGlobalConfigDir() {
-    return path.join(resolveHome(), ".config", "opencode");
+function xdgConfigHome(env = process.env) {
+    if (env.XDG_CONFIG_HOME && env.XDG_CONFIG_HOME.length > 0)
+        return env.XDG_CONFIG_HOME;
+    return path.join(resolveHome(env), ".config");
+}
+/**
+ * Native OpenCode global config dir: `$XDG_CONFIG_HOME/opencode`, otherwise
+ * `~/.config/opencode` — OpenCode's `Global.Path.config` (`xdg-basedir`
+ * `xdgConfig`, `packages/core/src/global.ts`), the same in 1.x and 2.0.
+ */
+export function opencodeGlobalConfigDir(env = process.env) {
+    return path.join(xdgConfigHome(env), "opencode");
 }
 /**
  * Host global cache dir for Cursor project metadata + model/version caches.
@@ -116,7 +125,7 @@ export function hostPlansDir(_workspaceRoot) {
     return path.join(hostGlobalDataDir(), "plans");
 }
 /**
- * Cursor-compatible path slug (`/Users/a/b` → `Users-a-b`).
+ * Cursor-compatible path slug (`/workspace/a/b` → `workspace-a-b`).
  * Used for per-workspace metadata under the host cache.
  */
 export function slugifyWorkspacePath(workspaceRoot) {
@@ -156,9 +165,4 @@ export function ensureOpencodeProjectDir(workspaceRoot) {
         `override=${hostCacheDirOverride ?? "(none)"} ` +
         `xdg_cache_home=${process.env.XDG_CACHE_HOME ?? "(unset)"}`);
     return dir;
-}
-export function resolveHomeRelative(p) {
-    if (p.startsWith("~/"))
-        return path.join(homedir(), p.slice(2));
-    return p;
 }

@@ -7,7 +7,7 @@
  * OpenCode 2.0 uses it to select its vendor-maintained `plan` / `build` agents;
  * OpenCode 1.x continues to use advertised `plan_enter` / `plan_exit` tools.
  */
-import { trace } from "./debug.js";
+import { errorMessage, trace } from "./debug.js";
 let switchHostAgent;
 const pending = new Map();
 const MAX_PENDING_HOST_AGENT_SWITCHES = 256;
@@ -82,7 +82,7 @@ export async function flushHostAgentModeSwitch(sessionID, options = {}) {
         // behavioral fallback until the native host switch succeeds.
         delete state.cursorSessionID;
         trace(`host-agent-mode: FAILED sessionID=${key} target=${state.targetModeID} ` +
-            `attempts=${state.attempts} err=${error instanceof Error ? error.message : String(error)}`);
+            `attempts=${state.attempts} err=${errorMessage(error)}`);
         return false;
     }
 }

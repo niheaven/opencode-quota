@@ -47,7 +47,8 @@ function cloneConversation(value) {
  *
  * ConversationCache: schema_version=1, session_key=2, conversation_id=3,
  * updated_at=4, checkpoint=5, blobs=6, request_context=7, tool_catalog=8,
- * post_compaction_rebase=9, host_agent=10, system_prompt_hash=11.
+ * post_compaction_rebase=9, host_agent=10, system_prompt_hash=11,
+ * turn_provenance_json=12.
  * Blob: id=1, data=2. Tool: name=1, description=2,
  * input_schema_json=3, source_name=4.
  *
@@ -176,6 +177,8 @@ function encodeCacheFile(value) {
         writer.uint32(fieldTag(10, 2)).string(value.hostAgent);
     if (value.systemPromptHash)
         writer.uint32(fieldTag(11, 2)).string(value.systemPromptHash);
+    if (value.turnProvenance)
+        writer.uint32(fieldTag(12, 2)).string(value.turnProvenance);
     return { protobufBytes: writer.finish(), requestContextBytes: requestContext.length };
 }
 function decodeProtobuf(data) {
@@ -191,6 +194,7 @@ function decodeProtobuf(data) {
     let postCompactionRebase = false;
     let hostAgent;
     let systemPromptHash;
+    let turnProvenance;
     while (reader.pos < reader.len) {
         const tag = reader.uint32();
         const wireType = tag & 7;
@@ -250,6 +254,11 @@ function decodeProtobuf(data) {
                     throw new Error("invalid system prompt hash");
                 systemPromptHash = reader.string();
                 break;
+            case 12:
+                if (wireType !== 2)
+                    throw new Error("invalid turn provenance");
+                turnProvenance = reader.string();
+                break;
             default:
                 reader.skipType(wireType);
         }
@@ -270,6 +279,7 @@ function decodeProtobuf(data) {
         postCompactionRebase,
         ...(hostAgent ? { hostAgent } : {}),
         ...(systemPromptHash ? { systemPromptHash } : {}),
+        ...(turnProvenance ? { turnProvenance } : {}),
     };
 }
 function decodeCacheFile(compressed, expectedSessionKey) {

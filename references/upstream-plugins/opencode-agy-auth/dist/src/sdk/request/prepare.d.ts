@@ -12,4 +12,6 @@ export declare function prepareAgyRequest(input: RequestInfo, init: RequestInit 
     requestedModel?: string;
     sessionId?: string;
 };
+export declare function isClaudeModel(model: string): boolean;
+export declare function sanitizeClaudeThinkingParts(contents: any[], model: string): void;
 export declare function ensureTrailingUserTurn(contents: any[]): any[];

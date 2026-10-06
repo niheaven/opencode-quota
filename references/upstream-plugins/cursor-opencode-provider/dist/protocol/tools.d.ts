@@ -61,7 +61,9 @@ export declare function sanitizeMcpServerId(value: string): string;
 export declare function resolveToolServerIdentity(opencodeName: string, defaultServer?: string, knownMcpServers?: Iterable<string>): ToolServerIdentity;
 /**
  * Convert opencode's per-turn tool list into Cursor `McpToolDefinition`
- * entries for `request_context.tools` (#7) and `AgentRunRequest.mcp_tools`.
+ * entries for session exec remap / bridges. These are not sent on
+ * RequestContext.tools (#7) or AgentRunRequest.mcp_tools (both omitted/empty
+ * on the wire). Exec #36 still uses the same identity fields.
  *
  * Builtins and unknown plugin/custom tools are advertised under the synthetic
  * default server (`opencode`). Tools whose prefixes match configured MCP
@@ -79,12 +81,13 @@ export declare function toolsToDescriptors(tools: OpencodeToolDef[], providerIde
 export declare function buildCustomWebToolAliases(tools: OpencodeToolDef[]): AliasedToolCatalog;
 export declare function resolveCustomWebToolAlias(toolName: string, aliases: ToolAliasRegistry | undefined): string;
 /**
- * Build the nested McpFileSystemOptions / McpMetaToolOptions shape used by
- * requestContext.#23 / #34. One `McpDescriptor` per resolved server (builtins
- * and unknown tools under the synthetic default; configured MCP tools under
- * their upstream server id).
+ * Nested MCP descriptors. Full name/description/schema is for exec #36.
+ * RequestContext `mcp_meta_tool_options` uses `{ namesOnly: true }` (`tool_name`
+ * only). File-system `mcp_descriptors` are omitted on the wire.
  */
-export declare function toolsToMcpDescriptors(tools: OpencodeToolDef[], providerIdentifier?: string, knownMcpServers?: Iterable<string>): Array<Record<string, unknown>>;
+export declare function toolsToMcpDescriptors(tools: OpencodeToolDef[], providerIdentifier?: string, knownMcpServers?: Iterable<string>, options?: {
+    namesOnly?: boolean;
+}): Array<Record<string, unknown>>;
 /**
  * @deprecated Prefer `buildRequestContext` from `../context/build.js`.
  * Kept as a sync tools-only fallback for unit tests that don't need collectors.
@@ -340,11 +343,15 @@ export declare function detectExecVariantField(agentServerPayload: Uint8Array): 
  */
 export declare function buildRequestContextResult(execId: number, requestContext: Record<string, unknown>): Uint8Array;
 /**
- * Answer Cursor's exec #36 MCP-state probe from the same descriptors advertised
- * in RequestContext. OpenCode remains the executor; this only confirms that the
- * provider's virtual MCP servers and their tools are available.
+ * Answer Cursor's exec #36 MCP-state probe from the session's live tool
+ * descriptors: `toolsToDescriptors` output for the advertised catalog (after
+ * web-tool aliasing), refreshed on every `doStream`. These are the same
+ * identities the names-only RequestContext advertises and exec remap uses, so
+ * Cursor's native get_mcp_tools can correlate the later
+ * provider_identifier/tool_name request. OpenCode remains the executor; this
+ * only confirms those tools are available, with full name/description/schema.
  */
-export declare function buildMcpStateResult(execId: number, args: Record<string, unknown>, requestContext: Record<string, unknown>): Uint8Array;
+export declare function buildMcpStateResult(execId: number, args: Record<string, unknown>, toolDescriptors: ReadonlyArray<Record<string, unknown>>): Uint8Array;
 /**
  * Total fallback for Cursor's native MCP-resource exec channel (agent.v1
  * fields #17/#18, tasks/plans/fix-cursor-mcp-resource-exec.md). Under Option B

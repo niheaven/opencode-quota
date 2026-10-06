@@ -1,4 +1,4 @@
-import { type OpencodeToolDef } from "./tools.js";
+import type { OpencodeToolDef } from "./tools.js";
 import type { CursorImageInput } from "../image-input.js";
 export type SeedHistoryMessage = {
     role: "system" | "user" | "assistant";
@@ -11,7 +11,6 @@ export type RunRequestInput = {
     conversationId: string;
     /** Stable parent group; unlike conversationId, this survives compaction/rebase. */
     conversationGroupId?: string;
-    systemPrompt?: string;
     /**
      * Prior chat turns for a seed ConversationStateStructure (no checkpoint).
      * Tool outputs, when required for compaction/recovery, are represented as
@@ -22,7 +21,7 @@ export type RunRequestInput = {
      * Opaque ConversationStateStructure bytes from the last
      * conversation_checkpoint_update for this conversation_id. When set, echoed
      * as AgentRunRequest.conversation_state (CLI parity). When absent, a seed
-     * state with the system prompt (or empty) is built for turn 1.
+     * state carrying only `history` (or empty) is built for turn 1.
      */
     conversationState?: Uint8Array;
     parameterValues?: Array<{
@@ -42,19 +41,22 @@ export type RunRequestInput = {
 /**
  * Seed ConversationStateStructure for the first turn (no checkpoint yet).
  *
- * OpenCode needs a system prompt channel; we put it in root_prompt_messages_json
- * as a JSON chat message. After the first checkpoint arrives we stop inventing
- * state and echo the server's opaque structure instead (CLI behavior).
+ * After the first checkpoint arrives we stop inventing state and echo the
+ * server's opaque structure instead (CLI behavior). Compaction resets and
+ * rebases also use this seed, with `history` carrying OpenCode's prompt turns
+ * so Cursor can continue without the old checkpoint.
  *
- * Compaction resets also use this seed, with `history` carrying OpenCode's
- * compacted prompt turns so Cursor can summarize without the old checkpoint.
+ * No `system` entry is seeded: Cursor does not follow a client-authored
+ * `system` root message, and neither Cursor client writes
+ * `root_prompt_messages_json`. Host system context travels as the
+ * system-instructions rule in RequestContext (`systemInstructionsRule`), so
+ * `system` history entries are dropped here rather than duplicated.
  *
  * We deliberately do NOT use `AgentRunRequest.custom_system_prompt` (#8): that
  * field is the internal `--system-prompt` CLI override and the server rejects
  * it for normal accounts.
  */
 export declare function buildSeedConversationState(input?: {
-    systemPrompt?: string;
     history?: SeedHistoryMessage[];
 }): Uint8Array;
 /**

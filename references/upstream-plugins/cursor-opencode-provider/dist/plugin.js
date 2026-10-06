@@ -1,57 +1,45 @@
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { CURSOR_API_HOST, CURSOR_COMPACTION_OPTION, CURSOR_HOST_AGENT_OPTION, CURSOR_PROVIDER_ID, CURSOR_WEBSITE_HOST, } from "./shared.js";
 import { cursorApiBaseURL, cursorGetServerConfigTelemetryEnabled } from "./plugin-core.js";
-import { pollForTokens, exchangeApiKey, refreshAccessToken, isExpiringSoon, generatePkceParams, generatePkceChallenge, buildLoginUrl, decodeJwtExpiryMs } from "./auth.js";
+import { pollForTokens, exchangeApiKey, isExpiringSoon, generatePkceParams, generatePkceChallenge, buildLoginUrl, decodeJwtExpiryMs, isExchangeableApiKey } from "./auth.js";
+import { renewSessionIfDue, resolveApiKeyToken, } from "./auth-renewal.js";
+import { CursorAuthError } from "./errors.js";
+import { errorMessage, trace } from "./debug.js";
 import { readCache, discoverModels, isCacheFresh } from "./models.js";
-// Re-exported for API compatibility: tests and downstream code import these
-// from "./plugin.js". Canonical home is ./model-config.ts, which stays free of
-// host plugin imports so the OpenCode 2.0 entrypoint can share it.
 import { modelsToConfig } from "./model-config.js";
-export { modelInfoToConfig, modelsToConfig, thinkingSuffixBaseNames } from "./model-config.js";
-import { opencodeGlobalCacheDir, opencodeGlobalConfigDirs } from "./context/paths.js";
+import { loadClassicTools } from "./classic-tools.js";
+import { opencodeGlobalCacheDir } from "./context/paths.js";
 import { readStoredAuth } from "./context/auth-store.js";
 import { resolveAgentUrl } from "./agent-url.js";
 import { captureCursorShellResult, cursorShellEnvForCall, cursorShellOriginalCommand, prepareCursorShellArgs, releaseCursorShellEnv, sanitizeRegisteredCursorShellOutput, setCursorShellPath, } from "./shell-timeout.js";
 import { sessionActivity } from "./activity.js";
-import { createOpenCodeWebSearchTool, openCodeWebSearchTool } from "./web-search-tool.js";
-import { createCursorImageSaveTool, cursorImageSaveTool } from "./image-save-tool.js";
 import { createPlanExecutionKickoffText, setPlanExecutionKickoff, } from "./plan-execution-kickoff.js";
 import { dispatchHostEventBridge } from "./host-event-bridge.js";
 const MODULE_URL = new URL("./index.js", import.meta.url).href;
-export async function loadClassicTools(options = {}) {
-    const configDir = options.configDirs?.[0] ?? opencodeGlobalConfigDirs()[0];
-    const candidates = [
-        ...(configDir
-            ? [path.join(configDir, "node_modules", "@opencode-ai", "plugin", "dist", "index.js")]
-            : []),
-        "@opencode-ai/plugin",
-    ];
-    const importModule = options.importModule ?? ((specifier) => import(specifier));
-    // The global config copy is the host-owned installation; bare import is a fallback.
-    for (const candidate of candidates) {
-        try {
-            const specifier = path.win32.isAbsolute(candidate) && !path.isAbsolute(candidate)
-                ? new URL(`file:///${candidate.replaceAll("\\", "/")}`).href
-                : path.isAbsolute(candidate)
-                    ? pathToFileURL(candidate).href
-                    : candidate;
-            const module = await importModule(specifier);
-            if (typeof module.tool === "function" && module.tool.schema) {
-                const factory = { tool: module.tool, schema: module.tool.schema };
-                return {
-                    webSearch: createOpenCodeWebSearchTool(factory),
-                    imageSave: createCursorImageSaveTool(factory),
-                };
-            }
-        }
-        catch {
-            // Try the next host-owned/normal resolution location.
-        }
+/**
+ * Raw `crsr_` key behind an API-key login: under `metadata.apiKey` (saved at
+ * login, and merged there from the prompt inputs by OpenCode's CLI), or as
+ * `key` itself when OpenCode stored the typed key without our exchange.
+ */
+function storedApiKey(auth) {
+    const fromMetadata = auth.metadata?.apiKey;
+    if (typeof fromMetadata === "string" && isExchangeableApiKey(fromMetadata))
+        return fromMetadata;
+    return isExchangeableApiKey(auth.key) ? auth.key : undefined;
+}
+function sessionTokens(auth) {
+    // Cursor's IDE refreshes with the stored refresh token and then stores the
+    // new access token as both; an empty refresh field means the same.
+    return { accessToken: auth.access, refreshToken: auth.refresh || auth.access };
+}
+/** Whether `latest` is still the credential a renewal started from. */
+function isSameCredential(latest, started) {
+    if (latest.type === "oauth" && started.type === "oauth") {
+        return latest.access === started.access && latest.refresh === started.refresh;
     }
-    // `tool()` is an identity helper; the fallback definitions use plain JSON
-    // Schema accepted by OpenCode's legacy registry when no Zod helper is present.
-    return { webSearch: openCodeWebSearchTool, imageSave: cursorImageSaveTool };
+    if (latest.type === "api" && started.type === "api") {
+        return latest.key === started.key && storedApiKey(latest) === storedApiKey(started);
+    }
+    return false;
 }
 export async function CursorPlugin(input) {
     const cacheDir = opencodeGlobalCacheDir();
@@ -76,13 +64,7 @@ export async function CursorPlugin(input) {
             });
         }
         : undefined);
-    // Last access token successfully resolved in this plugin instance. Config's
-    // loadModels can only read OpenCode's durable store (auth.json /
-    // OPENCODE_AUTH_CONTENT); auth.loader gets live credentials via getAuth().
-    // Those usually match, but after a refresh where persistAuthBestEffort fails,
-    // getAuth() may still see the old credentials while we already hold a usable
-    // token here — keep it so the loader can still discover models.
-    let sessionAccessToken;
+    let lastPersistAttempt;
     async function persistAuth(body) {
         await input.client.auth.set({
             path: { id: CURSOR_PROVIDER_ID },
@@ -110,63 +92,92 @@ export async function CursorPlugin(input) {
      * and config share the same underlying credentials when possible.
      */
     async function authForLoader(getAuth) {
-        return (await getAuth()) ?? (await authFromStore());
+        // getAuth is also called long after the loader returned (per-Run token
+        // resolution); never let a host-side failure there hide the durable store.
+        return (await getAuth().catch(() => undefined)) ?? (await authFromStore());
     }
-    async function resolveAccessToken(auth) {
-        if (auth.type === "api") {
-            let accessToken = auth.key;
-            const refreshToken = auth.metadata?.refreshToken;
-            // API-key exchange returns a short-lived JWT stored as `key`. Refresh
-            // it the same way as OAuth when it is expiring / already expired.
-            if (refreshToken && isExpiringSoon(auth.key)) {
-                try {
-                    const newTokens = await refreshAccessToken(refreshToken, apiBaseURL);
-                    accessToken = newTokens.accessToken;
-                    await persistAuthBestEffort({
-                        type: "api",
-                        key: newTokens.accessToken,
-                        metadata: {
-                            ...auth.metadata,
-                            refreshToken: newTokens.refreshToken,
-                        },
-                    });
-                }
-                catch {
-                    // refresh failed — keep the existing key; the next call may still work
-                }
-            }
-            if (accessToken)
-                sessionAccessToken = accessToken;
-            return accessToken;
+    /**
+     * Persist a renewed credential unless the stored one changed meanwhile (a
+     * re-login, or another process's renewal): never overwrite newer state.
+     */
+    async function persistRenewal(started, next, readCurrent) {
+        // One attempt per renewed token: when the write fails (read-only store,
+        // injected OPENCODE_AUTH_CONTENT) later Runs keep the in-memory token
+        // instead of re-reading and re-writing the store on every turn.
+        const token = next.type === "oauth" ? next.access : next.type === "api" ? next.key : undefined;
+        if (token === undefined || token === lastPersistAttempt)
+            return;
+        lastPersistAttempt = token;
+        const latest = await readCurrent().catch(() => undefined);
+        if (!latest || !isSameCredential(latest, started)) {
+            trace("auth: stored Cursor credential changed during renewal; keeping the stored one");
+            return;
         }
-        if (auth.type === "oauth") {
-            if (!isExpiringSoon(auth.access)) {
-                sessionAccessToken = auth.access;
-                return auth.access;
-            }
-            if (!auth.refresh)
-                return undefined;
-            try {
-                const newTokens = await refreshAccessToken(auth.refresh, apiBaseURL);
-                // Preserve optional OAuth fields (v2 Auth / plugin may carry these).
-                const extras = auth;
-                // Use the new token even if persisting back to OpenCode fails.
-                await persistAuthBestEffort({
-                    type: "oauth",
-                    access: newTokens.accessToken,
-                    refresh: newTokens.refreshToken,
-                    expires: decodeJwtExpiryMs(newTokens.accessToken) ?? Date.now(),
-                    ...(extras.accountId !== undefined ? { accountId: extras.accountId } : {}),
-                    ...(extras.enterpriseUrl !== undefined ? { enterpriseUrl: extras.enterpriseUrl } : {}),
-                });
-                sessionAccessToken = newTokens.accessToken;
-                return newTokens.accessToken;
-            }
-            catch {
-                return undefined;
-            }
+        await persistAuthBestEffort(next);
+    }
+    /** Browser-login session: renew when due (or forced) and persist the result. */
+    async function resolveSession(auth, readCurrent, force = false) {
+        const renewal = await renewSessionIfDue(sessionTokens(auth), { baseUrl: apiBaseURL, force });
+        if (renewal.renewed) {
+            // Preserve optional OAuth fields (v2 Auth / plugin may carry these).
+            const extras = auth;
+            await persistRenewal(auth, {
+                type: "oauth",
+                access: renewal.accessToken,
+                refresh: renewal.accessToken,
+                expires: decodeJwtExpiryMs(renewal.accessToken) ?? Date.now(),
+                ...(extras.accountId !== undefined ? { accountId: extras.accountId } : {}),
+                ...(extras.enterpriseUrl !== undefined ? { enterpriseUrl: extras.enterpriseUrl } : {}),
+            }, readCurrent);
         }
+        return renewal;
+    }
+    /** API-key login: re-exchange the stored raw key when the JWT nears expiry. */
+    async function resolveApiKeyLogin(auth, readCurrent, force = false) {
+        const apiKey = storedApiKey(auth);
+        if (!apiKey) {
+            // Saved by an older version that kept only the exchanged JWT and its
+            // refresh token. Cursor renews API-key logins only by exchanging the key.
+            if (!isExpiringSoon(auth.key, 30))
+                return auth.key;
+            throw new CursorAuthError("This Cursor API-key login was saved without the key, so it cannot be renewed; sign in again with the API key", { code: "api_key_missing" });
+        }
+        const token = await resolveApiKeyToken(apiKey, {
+            baseUrl: apiBaseURL,
+            ...(isExchangeableApiKey(auth.key) ? {} : { seed: auth.key }),
+            force,
+        });
+        if (token.renewed) {
+            const { refreshToken: _unused, ...metadata } = auth.metadata ?? {};
+            await persistRenewal(auth, {
+                type: "api",
+                key: token.accessToken,
+                metadata: { ...metadata, apiKey },
+            }, readCurrent);
+        }
+        return token.accessToken;
+    }
+    /**
+     * Current access token for the stored credential. The two credential kinds
+     * are handled by separate paths and never substitute for each other.
+     */
+    async function resolveAccessToken(auth, readCurrent, force = false) {
+        if (auth.type === "oauth")
+            return (await resolveSession(auth, readCurrent, force)).accessToken;
+        if (auth.type === "api")
+            return resolveApiKeyLogin(auth, readCurrent, force);
         return undefined;
+    }
+    /** Best-effort token for startup work (model discovery, endpoint warmup). */
+    async function startupAccessToken(auth, readCurrent) {
+        try {
+            return await resolveAccessToken(auth, readCurrent);
+        }
+        catch (error) {
+            // Surfaced again, with the same message, when a Run asks for a token.
+            trace(`auth: no usable Cursor token at startup (${errorMessage(error)})`);
+            return undefined;
+        }
     }
     async function loadModels() {
         const cached = await readCache(cacheDir);
@@ -178,7 +189,7 @@ export async function CursorPlugin(input) {
         // or old-schema caches here so this process materializes the new model set.
         const auth = await authFromStore();
         if (auth) {
-            const accessToken = await resolveAccessToken(auth);
+            const accessToken = await startupAccessToken(auth, authFromStore);
             if (accessToken) {
                 try {
                     const models = await discoverModels(accessToken, cacheDir, { baseURL: apiBaseURL });
@@ -352,7 +363,9 @@ export async function CursorPlugin(input) {
                                 type: "success",
                                 key: result.accessToken,
                                 provider: CURSOR_PROVIDER_ID,
-                                metadata: { refreshToken: result.refreshToken },
+                                // Keep the raw key: Cursor renews an API-key login only by
+                                // exchanging the key again (its refresh token is never used).
+                                metadata: { apiKey },
                             };
                         }
                         catch {
@@ -362,10 +375,11 @@ export async function CursorPlugin(input) {
                 },
             ],
             async loader(getAuth) {
-                const auth = await authForLoader(getAuth);
-                // Prefer credentials from getAuth/store; if refresh already succeeded in
-                // loadModels but persist failed, fall back to the in-memory session token.
-                const accessToken = (auth ? await resolveAccessToken(auth) : undefined) ?? sessionAccessToken;
+                const readCurrent = () => authForLoader(getAuth);
+                const auth = await readCurrent();
+                // Model discovery and endpoint warmup need a token: like any request,
+                // that renews a due session (or expiring API-key JWT) first.
+                const accessToken = auth ? await startupAccessToken(auth, readCurrent) : undefined;
                 if (accessToken) {
                     // Skip when config already filled a fresh cache (avoids a second
                     // AvailableModels round-trip + background refresh on cold start).
@@ -384,8 +398,23 @@ export async function CursorPlugin(input) {
                         telemetryEnabled: cursorGetServerConfigTelemetryEnabled(),
                     }).catch(() => { });
                 }
+                // Asked for on every Run open: reads the live credential (so a
+                // re-login applies without a restart), renews it when due, persists the
+                // renewal. This is how OpenCode's own OAuth providers hand over
+                // credentials (codex, xai, copilot: a `fetch` that calls getAuth() per
+                // request): no token is placed in the options, which OpenCode serves
+                // unredacted from /provider; a function is dropped there.
+                const getAccessToken = async (request) => {
+                    const current = await readCurrent();
+                    const token = current
+                        ? await resolveAccessToken(current, readCurrent, request?.forceRefresh === true)
+                        : undefined;
+                    if (!token)
+                        throw new CursorAuthError("No Cursor login found; sign in to Cursor", { code: "no_credential" });
+                    return token;
+                };
                 return {
-                    ...(accessToken ? { accessToken } : {}),
+                    getAccessToken,
                     workspaceRoot: input.directory,
                     cacheDir,
                 };

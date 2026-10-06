@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { APICallError } from "@ai-sdk/provider";
 import { bidiRunStream, CursorRunInterruptedError, normalizeAgentRunOrigin, } from "./transport/connect.js";
 import { trace, traceRequestContextPaths } from "./debug.js";
+import { isExchangeableApiKey } from "./auth.js";
+import { resolveBearerToken } from "./auth-renewal.js";
 import { buildRunRequest, buildHeartbeat } from "./protocol/request.js";
 import { decodeFramePayload } from "./protocol/framing.js";
 import { debugWalkTurnEnded, decodeMessage, encodeMessage } from "./protocol/messages.js";
-import { parseExecServerMessage, buildToolCallPart, buildExecClientMessages, buildReadRejectionMessages, buildUnsupportedExecDeny, classifyMissingReadTarget, isUriReadTarget, resolveReadTargetPath, parseExecIdFromToolCallId, detectExecVariantField, buildRequestContextResult, buildMcpStateResult, buildListMcpResourcesFallback, buildReadMcpResourceFallback, buildCustomWebToolAliases, extractHostSubagentCatalog, resolveCustomWebToolAlias, remapNativeSubagentForCatalog, preferCorrelatedTaskDescription, remapCorrelatedEditWriteForCatalog, remapEditToolsForCatalog, buildCompleteEditReadMessages, rejectPartialReadMutation, binaryWritePayload, CUSTOM_WEBFETCH_TOOL, CUSTOM_WEBSEARCH_TOOL, CUSTOM_LIST_MCP_RESOURCES_TOOL, CUSTOM_READ_MCP_RESOURCE_TOOL, hostToolDialectFromTools, opencodePathArg, } from "./protocol/tools.js";
+import { parseExecServerMessage, buildToolCallPart, buildExecClientMessages, buildReadRejectionMessages, buildUnsupportedExecDeny, classifyMissingReadTarget, isUriReadTarget, resolveReadTargetPath, parseExecIdFromToolCallId, detectExecVariantField, buildRequestContextResult, buildMcpStateResult, buildListMcpResourcesFallback, buildReadMcpResourceFallback, buildCustomWebToolAliases, extractHostSubagentCatalog, toolsToDescriptors, resolveCustomWebToolAlias, remapNativeSubagentForCatalog, preferCorrelatedTaskDescription, remapCorrelatedEditWriteForCatalog, remapEditToolsForCatalog, buildCompleteEditReadMessages, rejectPartialReadMutation, binaryWritePayload, CUSTOM_WEBFETCH_TOOL, CUSTOM_WEBSEARCH_TOOL, CUSTOM_LIST_MCP_RESOURCES_TOOL, CUSTOM_READ_MCP_RESOURCE_TOOL, hostToolDialectFromTools, opencodePathArg, } from "./protocol/tools.js";
 import { buildGitDiffExecMessages } from "./protocol/git-diff.js";
 import { cursorExecVariantByRequestField, describeCursorExecVariant } from "./protocol/exec-variants.js";
 import { appendCheckpointUserGrounding, appendWorkspaceRootGrounding } from "./protocol/workspace-grounding.js";
@@ -25,16 +28,17 @@ import { IMAGE_PERMISSION_DENIED_PREFIX } from "./image-save.js";
 import { getCheckpoint, setCheckpoint } from "./protocol/checkpoint.js";
 import { cursorContextUsageMetadata, decodeConversationTokenDetails, } from "./protocol/token-details.js";
 import { conversationBlobCount, inspectConversationBlobGraph, } from "./protocol/blob-store.js";
-import { bindConversationId, resolveConversationGroupId, } from "./protocol/conversation-bind.js";
-import { clearPersistedConversationState, hydrateConversationState, persistConversationState, } from "./protocol/conversation-state.js";
+import { bindConversationId, peekConversationId, resolveConversationGroupId, } from "./protocol/conversation-bind.js";
+import { beginEmittedStep, detectForeignHistory, recordEmittedPart, trackTurnProvenance, } from "./protocol/turn-provenance.js";
+import { clearPersistedConversationState, hydrateConversationState, hydrateTurnProvenance, persistConversationState, } from "./protocol/conversation-state.js";
 import { initializeConversationPersistence } from "./protocol/conversation-persistence.js";
 import { resolveContinuationPolicy, sessionManager, } from "./session.js";
-import { CursorAuthError, CursorLocalCancellationError, CursorProtocolError, CursorProviderError, CursorRetryExhaustedError, CursorServerError, CursorTransportError, isTransientGrpcStatus, retrySuppressedError, toCursorProviderError, } from "./errors.js";
+import { CursorAuthError, CursorLocalCancellationError, CursorProtocolError, CursorProviderError, CursorRetryExhaustedError, CursorServerError, CursorTransportError, isRejectedCredentialError, isTransientGrpcStatus, retrySuppressedError, toCursorProviderError, } from "./errors.js";
 import { readCache, cacheFilePath, resolveVariantParameters, resolveVariantMaxMode, extractCursorVariantParameters, resolveCursorWireModelId } from "./models.js";
-import { getOrBuildRequestContext } from "./context/frozen.js";
-import { getHeldOverlaySkills } from "./context/overlay.js";
+import { getFrozenRequestContext, getOrBuildRequestContext } from "./context/frozen.js";
+import { systemInstructionsRuleText } from "./context/build.js";
 import { loadMergedConfig } from "./context/rules.js";
-import { buildDynamicCatalogRoutingInstruction, takeSkillCatalogChangeReminder, } from "./context/dynamic-catalog.js";
+import { buildDynamicCatalogRoutingInstruction, } from "./context/dynamic-catalog.js";
 import { admitContextEpoch, appendMidConversationMessage, resetContextEpochsForTests, } from "./context/epoch.js";
 import { workspaceRootFromRequestContext } from "./context/env.js";
 import { ensureOpencodeProjectDir, opencodeGlobalCacheDir, setHostCacheDirOverride, } from "./context/paths.js";
@@ -43,7 +47,7 @@ import { CURSOR_API_HOST, CURSOR_COMPACTION_OPTION, CURSOR_HISTORY_REWRITE_OPTIO
 import { isCompactionSession } from "./compaction-marker.js";
 import { resolveSessionWorkspaceRoot } from "./session-directory.js";
 import { assertCursorUserImageSupport, extractCursorPromptImages } from "./image-input.js";
-import { resolveCursorModelSupportsImages } from "./model-metadata.js";
+import { getDocumentedCursorModelContext, resolveCursorModelSupportsImages } from "./model-metadata.js";
 import { consumeCursorShellResult, registerCursorShellCall, } from "./shell-timeout.js";
 import { analyzeReplayFrame, AttemptReplaySafety } from "./replay-safety.js";
 import { readAllFieldsStrict } from "./protocol/struct.js";
@@ -111,6 +115,33 @@ function responseRequiredChannel(payload) {
     // Request tags are single-byte because all must-reply top-level fields are <16.
     const tag = payload[0];
     return tag !== undefined ? RESPONSE_REQUIRED_CHANNEL_BY_FIELD.get(tag >> 3) : undefined;
+}
+// AgentServerMessage fields that never carry output or stateful activity.
+const ASM_INTERACTION_UPDATE_FIELD = 1;
+const ASM_CHECKPOINT_UPDATE_FIELD = 3;
+const ASM_KV_SERVER_MESSAGE_FIELD = 4;
+const INTERACTION_UPDATE_HEARTBEAT_FIELD = 13;
+/**
+ * True when the raw frame holds exactly one control message: a KV request, a
+ * checkpoint update, or an interaction update that is only a heartbeat. Extra
+ * fields inside a KV request are tolerated (Cursor has sent them live); extra
+ * top-level fields are not.
+ */
+export function isSoleControlFrame(payload) {
+    const fields = readAllFieldsStrict(payload);
+    if (!fields || fields.length !== 1)
+        return false;
+    const [field] = fields;
+    if (field.wt !== 2)
+        return false;
+    if (field.fn === ASM_KV_SERVER_MESSAGE_FIELD || field.fn === ASM_CHECKPOINT_UPDATE_FIELD)
+        return true;
+    if (field.fn !== ASM_INTERACTION_UPDATE_FIELD || !field.bytes)
+        return false;
+    const update = readAllFieldsStrict(field.bytes);
+    return update?.length === 1
+        && update[0].fn === INTERACTION_UPDATE_HEARTBEAT_FIELD
+        && update[0].wt === 2;
 }
 function retryInteger(name, value, fallback) {
     const resolved = value === undefined ? fallback : value;
@@ -243,7 +274,10 @@ export function connectFrameError(payload) {
         const envelope = JSON.parse(payload);
         const code = typeof envelope.error?.code === "string" ? envelope.error.code : "unknown";
         if (code === "unauthenticated" || code === "permission_denied") {
-            return new CursorAuthError(`Cursor authentication failed (${code}); reauthenticate with Cursor`, { code });
+            return new CursorAuthError(`Cursor authentication failed (${code}); reauthenticate with Cursor`, {
+                code,
+                replaySafe: code === "unauthenticated",
+            });
         }
         let retryAfterMs = retryDelayFromValue(envelope.error?.retryAfter ?? envelope.error?.retry_after);
         let hasRetryInfo = false;
@@ -485,24 +519,42 @@ export function createCursorLanguageModel(modelId, providerId, options) {
         },
     };
 }
-async function doStreamImpl(modelId, options, callOptions) {
-    // A raw `crsr_...` API key must be exchanged for a JWT before it can be used
-    // as a Bearer token (the plugin path does this in auth.ts). The accessToken
-    // path is already a JWT from OAuth/key-exchange, so we use it as-is.
-    // resolveBearerToken caches apiKey exchanges so we don't hit /auth/exchange
-    // on every turn.
-    const { resolveBearerToken } = await import("./auth.js");
-    const token = await resolveBearerToken({
+/** Bearer token for a new Run from whichever single credential source `options` carries. */
+function resolveRunBearerToken(options, forceRefresh = false) {
+    return resolveBearerToken({
+        getAccessToken: options.getAccessToken,
         accessToken: options.accessToken,
         apiKey: options.apiKey,
         baseUrl: resolveApiBaseURL(options),
+        forceRefresh,
     });
+}
+async function doStreamImpl(modelId, options, callOptions) {
     const prompt = callOptions.prompt;
     const retryPolicy = resolveRetryPolicy(options.retry);
+    // The Bearer token is resolved for every Run this call opens, including
+    // recovery Runs after a long-held tool: a host `getAccessToken` (or the
+    // apiKey exchange) renews it, so a Run never starts on a token that expired
+    // while the turn was in progress. A held Run being continued keeps the
+    // token it was opened with. After Cursor rejects the credential, the next
+    // open asks the source for a forced renewal.
+    let forceCredentialRefresh = false;
+    const credentialRenewable = Boolean(options.getAccessToken)
+        || (!options.accessToken && options.apiKey !== undefined && isExchangeableApiKey(options.apiKey));
+    let prefetchedToken;
     // pumpWithRecovery owns the complete per-turn attempt budget.  Opening a
     // replacement session here must be a single attempt; otherwise setup retry
     // loops nest inside recovery and `maxAttempts` no longer caps total Runs.
-    const openSession = (startOptions) => startSession(modelId, token, callOptions, options, startOptions);
+    const openSession = async (startOptions) => {
+        const forceRefresh = forceCredentialRefresh;
+        forceCredentialRefresh = false;
+        const prefetched = prefetchedToken;
+        prefetchedToken = undefined;
+        const token = prefetched !== undefined && !forceRefresh
+            ? prefetched
+            : await resolveRunBearerToken(options, forceRefresh);
+        return startSession(modelId, token, callOptions, options, startOptions);
+    };
     // ── Continuation vs fresh turn ──
     // OpenCode embeds *all* historical tool results in every prompt. Only the
     // trailing tool-message suffix (after the last assistant/user message) is a
@@ -510,18 +562,25 @@ async function doStreamImpl(modelId, options, callOptions) {
     // false "orphaned tool results" errors after Cursor turn_ended and OpenCode
     // started the next step with old tools still in the prompt body.
     const trailingToolResults = extractTrailingToolResults(prompt);
+    let session = findContinuationSession(trailingToolResults);
+    // A call that must open a Run gets its credential before it changes any
+    // session state (plan mode, finishing the prior held Run), so a login that
+    // cannot be renewed fails the turn without side effects.
+    if (!session)
+        prefetchedToken = await resolveRunBearerToken(options);
     // A host may submit an already rendered plan through its canonical stage
     // tool after the Cursor Run has ended. The next call carries that tool result
     // without a Cursor exec id; reconcile the approved mode before a fresh Run.
     if (hasApprovedUncorrelatedPlanStageResult(prompt)) {
         setActiveCursorMode(opencodeSessionKey(callOptions), "agent");
     }
-    let session = findContinuationSession(trailingToolResults);
     if (session) {
         // Write pending results onto the held-open Run. A dead stream closes the
         // session and returns undefined so we fall through to history rebase
         // instead of pumping a connection that can no longer accept writes.
         session = deliverContinuationResults(session, trailingToolResults);
+        if (session)
+            await refreshHeldSessionToolCatalog(session, callOptions);
     }
     if (!session) {
         const sessionKey = opencodeSessionKey(callOptions);
@@ -589,6 +648,9 @@ async function doStreamImpl(modelId, options, callOptions) {
                         trace(`pull: stream-start enqueue failed (cancelled) err=${e.message}`);
                         return;
                     }
+                    if (activeSession.openCodeSessionId) {
+                        beginEmittedStep(activeSession.openCodeSessionId, activeSession.conversationId);
+                    }
                     activeSession = await pumpWithRecovery({
                         initialSession: activeSession,
                         controller,
@@ -596,6 +658,9 @@ async function doStreamImpl(modelId, options, callOptions) {
                         retryPolicy,
                         recover: (recovery) => openSession({ recovery }),
                         onSession: (next) => { activeSession = next; },
+                        ...(credentialRenewable
+                            ? { renewRejectedCredential: () => { forceCredentialRefresh = true; } }
+                            : {}),
                     });
                     try {
                         controller.close();
@@ -655,7 +720,29 @@ export async function pumpWithRecovery(input) {
         maxAttempts: (input.maxRecoveries ?? 1) + 1,
     };
     const maxRecoveries = retryPolicy.maxAttempts - 1;
+    let credentialRenewed = false;
     input.onSession?.(session);
+    const reopen = async (pumpedSession, failure) => {
+        const checkpoint = pumpedSession.resumeCheckpoint;
+        const recovery = failure.checkpointUnusable
+            ? { kind: "rebase", reason: "checkpoint-unusable" }
+            : checkpoint
+                ? {
+                    kind: "resume",
+                    conversationId: pumpedSession.conversationId,
+                    checkpoint: Uint8Array.from(checkpoint),
+                }
+                : { kind: "rebase" };
+        const next = await input.recover(recovery);
+        if (recovery.kind === "resume") {
+            next.usageEstimate = { ...pumpedSession.usageEstimate };
+            next.editToolCalls = new Map(pumpedSession.editToolCalls);
+            // mirroredTodos rides along via rememberMirroredTodos (per-OpenCode-
+            // session, seeded in startSession) — no handoff needed here.
+        }
+        input.onSession?.(next);
+        return next;
+    };
     for (let attempt = 0;; attempt++) {
         const pumpedSession = session;
         const pumpOwner = Symbol("cursor-pump");
@@ -672,6 +759,19 @@ export async function pumpWithRecovery(input) {
                 replaySafe: error instanceof CursorProviderError ? error.replaySafe : false,
                 fallback: "Cursor Run interrupted",
             });
+            if (input.renewRejectedCredential
+                && !credentialRenewed
+                && isRejectedCredentialError(failure)
+                && failure.replaySafe) {
+                credentialRenewed = true;
+                trace(`Run credential rejected: sessionId=${pumpedSession.sessionId} err=${failure.message} ` +
+                    `— renewing the token and reopening once`);
+                sessionManager.close(pumpedSession, "remote-error", failure);
+                input.renewRejectedCredential();
+                session = await reopen(pumpedSession, failure);
+                attempt--;
+                continue;
+            }
             if (!failure.transient)
                 throw failure;
             const checkpoint = pumpedSession.resumeCheckpoint;
@@ -687,21 +787,7 @@ export async function pumpWithRecovery(input) {
             const delayMs = retryDelayMs(failure, attempt + 1, retryPolicy);
             trace(`Run retry backoff: attempt=${attempt + 1}/${maxRecoveries} delayMs=${delayMs}`);
             await sleepForRetry(delayMs, input.abortSignal);
-            const recovery = checkpoint
-                ? {
-                    kind: "resume",
-                    conversationId: pumpedSession.conversationId,
-                    checkpoint: Uint8Array.from(checkpoint),
-                }
-                : { kind: "rebase" };
-            session = await input.recover(recovery);
-            if (recovery.kind === "resume") {
-                session.usageEstimate = { ...pumpedSession.usageEstimate };
-                session.editToolCalls = new Map(pumpedSession.editToolCalls);
-                // mirroredTodos rides along via rememberMirroredTodos (per-OpenCode-
-                // session, seeded in startSession) — no handoff needed here.
-            }
-            input.onSession?.(session);
+            session = await reopen(pumpedSession, failure);
         }
         finally {
             sessionManager.endPump(pumpedSession, pumpOwner);
@@ -788,6 +874,10 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
                 ...(restored.systemPromptHash ? { systemPromptHash: restored.systemPromptHash } : {}),
             });
         }
+        // Provenance has its own LRU; refill it if only that entry was evicted.
+        await hydrateTurnProvenance(cacheDir, sessionKey).catch((error) => {
+            trace(`turn provenance: restore failed sessionKey=${sessionKey}: ${String(error)}`);
+        });
     }
     const providerOptions = callOptions.providerOptions?.cursor;
     const hostAgent = typeof providerOptions?.[CURSOR_HOST_AGENT_OPTION] === "string"
@@ -838,10 +928,11 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         workspaceRoot: options.workspaceRoot,
     });
     const baseSystemPrompt = extractSystemPrompt(prompt);
-    // One merged-config load per Run: guidance MCP ids and RequestContext
-    // descriptors must agree, and warm turns must not pay for a second disk read.
-    const mergedConfig = isCompaction ? undefined : await loadMergedConfig(workspaceRoot);
-    const knownMcpServers = Object.keys(mergedConfig?.mcp ?? {});
+    // One merged-config load per Run: RequestContext names, session descriptors
+    // (exec remap, exec #36) and guidance MCP ids must agree on server identity,
+    // and warm turns must not pay for a second disk read.
+    const mergedConfig = await loadMergedConfig(workspaceRoot);
+    const knownMcpServers = Object.keys(mergedConfig.mcp ?? {});
     const interactionGuidance = buildOpenCodeInteractionGuidance(cursorTools, isCompaction, workspaceRoot, {
         knownMcpServers,
     });
@@ -853,15 +944,30 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         isCompaction,
         historyRewrite: providerOptions?.[CURSOR_HISTORY_REWRITE_OPTION] === true,
     });
+    // Cursor could not restore the stored checkpoint (missing blobs) before this
+    // turn produced anything: reseed from the full host history as a new turn.
+    const checkpointUnusable = recovery?.kind === "rebase" && recovery.reason === "checkpoint-unusable";
+    // Another model (other provider or a local model) answered since this
+    // conversation's last checkpoint: resuming it would hide that work from Cursor.
+    // A Cursor-to-Cursor model switch resumes the same conversation, as in the CLI.
+    const foreignHistory = sessionKey && !resuming && !ephemeralRun && !resetState.reset && recovery?.kind !== "rebase"
+        ? detectForeignHistory({
+            sessionKey,
+            conversationId: peekConversationId(sessionKey),
+            prompt,
+        })
+        : undefined;
     // Compaction must not reuse the prior conversation; its first normal turn
     // must also rebase so the summary-agent checkpoint cannot replace the normal
     // system prompt and OpenCode's newly compacted history.
     let bound = resuming
         ? { conversationId: resumeRecovery.conversationId, reset: false, previousId: undefined }
         : bindConversationId(sessionKey, {
-            reset: resetState.reset || recovery?.kind === "rebase",
+            reset: resetState.reset || recovery?.kind === "rebase" || !!foreignHistory,
             ephemeral: ephemeralRun,
         });
+    if (sessionKey && !ephemeralRun)
+        trackTurnProvenance(sessionKey, bound.conversationId);
     let conversationState = ephemeralRun
         ? undefined
         : resuming
@@ -870,7 +976,9 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     let checkpointGraph = conversationState
         ? inspectConversationBlobGraph(bound.conversationId, conversationState)
         : { count: 0, bytes: 0, complete: true };
-    const forcedResetReason = undefined;
+    const forcedResetReason = foreignHistory
+        ? `foreign-history:${foreignHistory}`
+        : checkpointUnusable ? "checkpoint-unusable" : undefined;
     // CLI soft-reuses incomplete / oversized graphs (100 MiB is export-only).
     // Never remint — warn and keep the sticky conversation + checkpoint.
     if (conversationState) {
@@ -896,7 +1004,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
             `previousId=${bound.previousId ?? "-"} → conversationId=${conversationId}`);
     }
     const lastUser = [...prompt].reverse().find((message) => message.role === "user");
-    let userText = recovery?.kind === "rebase"
+    let userText = recovery?.kind === "rebase" && !checkpointUnusable
         ? "Continue the interrupted turn from the conversation history above. Do not repeat completed work."
         : (extractUserText(lastUser) || ".");
     // After an approved SwitchMode, inject the Cursor CLI-shaped mode reminder
@@ -922,7 +1030,12 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         modeReminder,
         kickoffWarning ? `<system_reminder>${kickoffWarning}</system_reminder>` : undefined,
     ].filter((part) => !!part);
+    // `systemPrompt` is the host system context composed for a seed Run (kept for
+    // diagnostics and size estimates). It reaches Cursor only as the frozen
+    // system-instructions rule in RequestContext, never as a seeded `system`
+    // message, which Cursor does not follow.
     let systemPrompt;
+    let systemInstructions;
     if (isCompaction || lifecycle) {
         // Ephemeral summary/title Runs — do not initialize a sticky Context Epoch.
         systemPrompt = startedWithCheckpoint
@@ -931,6 +1044,10 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         if (startedWithCheckpoint && oneShotReminders.length) {
             userText = appendMidConversationMessage(userText, oneShotReminders.join("\n\n"));
         }
+        const ephemeralText = systemPrompt
+            ?? [baseSystemPrompt, interactionGuidance].filter(Boolean).join("\n\n");
+        if (ephemeralText)
+            systemInstructions = { text: ephemeralText, authoritative: true };
     }
     else {
         const admitted = admitContextEpoch({
@@ -941,9 +1058,19 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
             hostAgent,
             workspaceRoot,
             oneShotReminders,
+            recoveredBaseline: systemInstructionsRuleText(getFrozenRequestContext(conversationId) ?? {}),
         });
         systemPrompt = startedWithCheckpoint ? undefined : admitted.seedSystemPrompt;
         userText = appendMidConversationMessage(userText, admitted.midConversationMessage);
+        // The epoch baseline is the rule for every Run of this conversation. A
+        // recovered epoch keeps the persisted rule, and uses live context only if
+        // a legacy checkpoint was persisted without baseline bytes.
+        const frozenBaseline = admitted.epoch.baselineSystemPrompt;
+        const instructionText = frozenBaseline
+            || [baseSystemPrompt, interactionGuidance].filter(Boolean).join("\n\n");
+        if (instructionText) {
+            systemInstructions = { text: instructionText, authoritative: !!frozenBaseline };
+        }
         // A recovered epoch has no baseline bytes. Keep the hash restored from
         // the checkpoint snapshot so this turn's TurnEnded save does not drop it.
         const previousIdentity = sessionKey ? promptIdentityBySession.get(sessionKey) : undefined;
@@ -956,8 +1083,10 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         }
     }
     const history = extractPromptHistory(prompt, {
-        preserveTrailingUser: recovery?.kind === "rebase",
-        toolResults: isCompaction ? "all" : (recovery?.kind === "rebase" ? "trailing" : "omit"),
+        preserveTrailingUser: recovery?.kind === "rebase" && !checkpointUnusable,
+        // A foreign-history rebase replays every tool result: the other model's work
+        // exists only in OpenCode history, never in a Cursor checkpoint.
+        toolResults: isCompaction || foreignHistory || checkpointUnusable ? "all" : (recovery?.kind === "rebase" ? "trailing" : "omit"),
     });
     await loadAvailableModels();
     // Resolve the region-specific Run stream origin once per process (memoized
@@ -987,9 +1116,10 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         : await extractCursorPromptImages(prompt, lastUser, {
             supportsImages,
             // Content hashes are retained for the OpenCode session so growing
-            // history does not re-upload old screenshots. A recovery rebase opens
-            // a new Cursor conversation, so it must resend the same payload.
-            seenHistoryHashes: recovery?.kind === "rebase"
+            // history does not re-upload old screenshots. A recovery or
+            // foreign-history rebase opens a new Cursor conversation, so it must
+            // resend the same payload.
+            seenHistoryHashes: recovery?.kind === "rebase" || foreignHistory
                 ? undefined
                 : sentHistoryImageHashes(sessionKey),
             signal: callOptions.abortSignal,
@@ -1013,6 +1143,16 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         picked,
         maxMode: hintMaxMode,
     });
+    if (foreignHistory || checkpointUnusable) {
+        assertForeignHistoryRebaseFits({
+            modelInfo,
+            cursorModelId,
+            maxMode,
+            history,
+            systemPrompt,
+            userText,
+        });
+    }
     // Do NOT pass callOptions.abortSignal into the h2 Run stream. OpenCode aborts
     // that signal when a turn ends with tool-calls; the Cursor stream must stay
     // open until we write the exec results on the next doStream.
@@ -1022,20 +1162,10 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     });
     // Freeze RequestContext per conversation_id (CLI parity). Rebuilding every
     // Run mutates volatile slices (git porcelain, layout) and breaks prompt cache.
-    const { context: requestContext, reused: requestContextReused } = await getOrBuildRequestContext(conversationId, { workspaceRoot, tools: cursorTools, mergedConfig });
-    // Issue #29: after skills are in RequestContext, admit the catalog. OpenCode
-    // only Mid-Conversation-updates when the available-skills list changes
-    // (SkillGuidance / SkillInstructions) — never per-turn matched-id nudges.
-    // Gate on the host-permitted set, not the epoch-held advertisement.
-    if (!isCompaction && !lifecycle) {
-        const skillDialect = hostToolDialectFromTools(tools, options.defaultDialect);
-        const skillNudge = takeSkillCatalogChangeReminder(conversationId, {
-            hasSkillTool: allowTools && incomingTools.some((tool) => tool.name === "skill"),
-            skills: getHeldOverlaySkills(conversationId),
-            skillArgKey: skillDialect.skillArgKey,
-        });
-        userText = appendMidConversationMessage(userText, skillNudge);
-    }
+    const { context: requestContext, reused: requestContextReused } = await getOrBuildRequestContext(conversationId, { workspaceRoot, tools: cursorTools, mergedConfig, systemInstructions });
+    // Skills live in the host system prompt and `skill` tool. Do not scan disk or
+    // emit RequestContext `agent_skills` Mid-Conversation XML; host `<system-update>`
+    // is the catalog-change channel.
     const contextSubagents = Array.isArray(requestContext.custom_subagents)
         ? requestContext.custom_subagents
             .map((agent) => agent && typeof agent === "object" && typeof agent.name === "string"
@@ -1053,11 +1183,9 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         agents: [...new Map([...discoveredSubagentCatalog.agents, ...contextSubagents]
                 .map((agent) => [agent.name, agent])).values()],
     };
-    // Resolve descriptors once from the merged OpenCode config so MCP identity is
-    // consistent across AgentRunRequest and both request_context reply paths.
-    const toolDescriptors = Array.isArray(requestContext.tools)
-        ? requestContext.tools
-        : [];
+    // Session exec remap / bridges need full McpToolDefinition identity. The wire
+    // omits RequestContext.tools (#7); do not read descriptors from there.
+    const toolDescriptors = toolsToDescriptors(cursorTools, "opencode", knownMcpServers);
     // CLI parity: echo the last conversation_checkpoint_update as conversation_state.
     // After compaction or an unsafe checkpoint reset there is no checkpoint —
     // seed a new Cursor conversation from OpenCode's authoritative history.
@@ -1067,7 +1195,6 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         modelId: cursorModelId,
         conversationId,
         conversationGroupId,
-        systemPrompt: conversationState ? undefined : systemPrompt,
         history: conversationState ? undefined : history,
         conversationState,
         parameterValues,
@@ -1080,9 +1207,6 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     // Content hashes — Cursor content-addresses large payloads; logging these lets
     // us match a server get_blob_args.blob_id to what it wants served.
     const sha = (b) => createHash("sha256").update(b).digest("hex");
-    const skillsCount = Array.isArray(requestContext.agent_skills)
-        ? requestContext.agent_skills.length
-        : 0;
     const hooksCtx = typeof requestContext.hooks_additional_context === "string"
         ? requestContext.hooks_additional_context
         : "";
@@ -1115,7 +1239,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
         `params=${JSON.stringify(parameterValues ?? [])} ` +
         `maxMode=${maxMode} systemPromptLen=${systemPrompt?.length ?? 0} ` +
         `tools=${tools.length} incomingTools=${incomingTools.length} compaction=${isCompaction} ` +
-        `skills=${skillsCount} hooks=${hooksCtx ? hooksCtx.split("\n").length : 0} ` +
+        `hooks=${hooksCtx ? hooksCtx.split("\n").length : 0} ` +
         `availableModels=${_availableModels?.length ?? 0} userTextLen=${userText.length} ` +
         `images=${images.length} imageBytes=${images.reduce((total, image) => total + image.data.length, 0)} ` +
         `historyMsgs=${history.length} historyChars=${historyChars} ` +
@@ -1174,10 +1298,12 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
             switchModeInTurn: false,
         },
         openCodeSessionId: ephemeralRun ? undefined : sessionKey,
+        checkpointRebaseEligible: !ephemeralRun && !resuming && !recovery && !!conversationState,
         hostAgent,
         stableSystemPromptHash: frozenSystemPromptHash,
         postCompactionRebase: isCompaction,
-        toolCatalog: snapshotToolCatalog(sessionKey),
+        toolCatalog: sessionKey ? snapshotToolCatalog(sessionKey) : structuredClone(tools),
+        knownMcpServers,
         stream,
         frames: stream.frames()[Symbol.asyncIterator](),
         pending: new Map(),
@@ -1229,12 +1355,7 @@ async function startSession(modelId, token, callOptions, options, startOptions) 
     };
     session.reopenWithUserMessage = async (text) => {
         abortIfNeeded();
-        const { resolveBearerToken } = await import("./auth.js");
-        const freshToken = await resolveBearerToken({
-            accessToken: options.accessToken,
-            apiKey: options.apiKey,
-            baseUrl: resolveApiBaseURL(options),
-        });
+        const freshToken = await resolveRunBearerToken(options);
         abortIfNeeded();
         // Do not pass OpenCode's abortSignal into the h2 stream: a tool-calls abort
         // must not tear down a Run we still need to pump. Check abort around open.
@@ -2105,6 +2226,23 @@ export async function pump(session, controller, ids, abortSignal) {
         switchModeInTurn: false,
     };
     cacheDiagnostics.pumpPasses++;
+    // Only the first pass of a fresh Run resumed from a stored checkpoint, before
+    // anything but control frames (KV, heartbeat, checkpoint) arrived, may be
+    // reseeded after Cursor asked for blobs this client does not hold.
+    const checkpointRebaseCandidate = session.checkpointRebaseEligible === true
+        && cacheDiagnostics.pumpPasses === 1;
+    let blobMiss = false;
+    let onlyControlFrames = true;
+    const finalizeFailure = (failure) => {
+        if (checkpointRebaseCandidate && blobMiss && onlyControlFrames && failure.transient) {
+            trace(`checkpoint unusable: Run failed after missing KV blobs before any output ` +
+                `sessionId=${session.sessionId} conversationId=${session.conversationId} err=${failure.message}`);
+            failure.replaySafe = true;
+            failure.checkpointUnusable = true;
+            return failure;
+        }
+        return replaySafety.applyTo(failure);
+    };
     const { textId, reasoningId } = ids;
     const advertisedToolNames = advertisedToolNamesFromDescriptors(session.toolDescriptors);
     const advertisedToolNameSet = new Set(advertisedToolNames.map((name) => resolveCustomWebToolAlias(name, session.toolAliases)));
@@ -2150,6 +2288,9 @@ export async function pump(session, controller, ids, abortSignal) {
             return false;
         try {
             controller.enqueue(part);
+            if (session.openCodeSessionId) {
+                recordEmittedPart(session.openCodeSessionId, session.conversationId, part);
+            }
             return true;
         }
         catch (e) {
@@ -2500,13 +2641,13 @@ export async function pump(session, controller, ids, abortSignal) {
             const failure = error instanceof CursorProviderError
                 ? error
                 : new CursorRunInterruptedError(`Cursor Run frame stream interrupted: ${error.message}`, { cause: error });
-            throw replaySafety.applyTo(failure);
+            throw finalizeFailure(failure);
         }
         if (next.done) {
             closeOpenSpans();
             trace("pump: frames iterator ended before turn_ended");
             const failure = new CursorRunInterruptedError();
-            throw replaySafety.applyTo(failure);
+            throw finalizeFailure(failure);
         }
         const frame = next.value;
         if (frame.flags & 0x02) {
@@ -2526,7 +2667,7 @@ export async function pump(session, controller, ids, abortSignal) {
             const failure = payload
                 ? connectFrameError(payload)
                 : new CursorRunInterruptedError();
-            throw replaySafety.applyTo(failure);
+            throw finalizeFailure(failure);
         }
         // decodeFramePayload can throw on a corrupt gzip payload (gunzipSync).
         // Skip the frame rather than abort the whole turn.
@@ -2536,6 +2677,7 @@ export async function pump(session, controller, ids, abortSignal) {
         }
         catch (e) {
             replaySafety.markBarrier("unknown-or-malformed-frame");
+            onlyControlFrames = false;
             trace(`gunzip FAILED (skipping frame): flags=0x${frame.flags.toString(16)} len=${frame.payload.length} err=${e.message}`);
             continue;
         }
@@ -2548,6 +2690,7 @@ export async function pump(session, controller, ids, abortSignal) {
             // (protobufjs throws "index out of range: …" on length overruns). Log it
             // and keep pumping.
             replaySafety.markBarrier("unknown-or-malformed-frame");
+            onlyControlFrames = false;
             const channel = responseRequiredChannel(payload);
             if (channel) {
                 failRunProtocol(`Cursor ${channel} request could not be decoded`, RUN_REQUEST_DECODE_FAILED);
@@ -2583,6 +2726,11 @@ export async function pump(session, controller, ids, abortSignal) {
         }
         if (replayFrame.barrier)
             replaySafety.markBarrier(replayFrame.barrier);
+        // Reseeding is allowed only while every frame so far was positively a
+        // control frame. Anything else, including unknown top-level fields, may have
+        // carried output or stateful activity.
+        if (!isSoleControlFrame(payload))
+            onlyControlFrames = false;
         {
             const iuKind = iu ? Object.keys(iu).find((k) => iu[k]) : undefined;
             trace(`pump frame: topField=${topField} interaction_update=${iuKind ?? "-"} ` +
@@ -2778,13 +2926,12 @@ export async function pump(session, controller, ids, abortSignal) {
                 cacheDiagnostics.execRequests++;
                 const esmId = esm.id ?? 0;
                 if (esm.request_context_args) {
-                    // Server turn-setup probe (#10). Reply with full OpenCode-sourced context.
+                    // Server turn-setup probe (#10). Reply with the same RequestContext the Run sent.
                     {
                         const rc = session.requestContext;
-                        const skills = Array.isArray(rc.agent_skills) ? rc.agent_skills.length : 0;
                         const hooks = typeof rc.hooks_additional_context === "string" ? rc.hooks_additional_context : "";
                         trace(`exec request_context: id=${esmId} — replying context ` +
-                            `tools=${session.toolDescriptors.length} skills=${skills} ` +
+                            `tools=${session.toolDescriptors.length} ` +
                             `hooks=${hooks ? hooks.split("\n").length : 0}`);
                         if (hooks)
                             trace(`exec request_context hooks_additional_context: ${hooks}`);
@@ -2801,14 +2948,15 @@ export async function pump(session, controller, ids, abortSignal) {
                 }
                 else if (esm.mcp_state_exec_args) {
                     // MCP-backed writes/reads can be preceded by this control-plane probe.
-                    // Confirm the virtual servers from the already-advertised context, then
-                    // keep pumping until Cursor emits the actual mcp_args tool request.
+                    // Confirm servers from the live host catalog (refreshed on each
+                    // doStream, including continuation), then keep pumping until Cursor
+                    // emits the actual mcp_args tool request.
                     const stateArgs = esm.mcp_state_exec_args;
                     const requested = Array.isArray(stateArgs.server_identifiers)
                         ? stateArgs.server_identifiers.join(",")
                         : "";
                     try {
-                        await writeWithBackpressure(session.stream, buildMcpStateResult(esmId, stateArgs, session.requestContext), `MCP-state reply id=${esmId}`);
+                        await writeWithBackpressure(session.stream, buildMcpStateResult(esmId, stateArgs, session.toolDescriptors), `MCP-state reply id=${esmId}`);
                         trace(`exec mcp_state: replied id=${esmId} requested=[${requested}]`);
                     }
                     catch (error) {
@@ -3296,6 +3444,10 @@ export async function pump(session, controller, ids, abortSignal) {
                     `setBlobIdLen=${kv.set_blob_args?.blob_id?.length ?? "-"} ` +
                     `setDataLen=${kv.set_blob_args?.blob_data?.length ?? "-"}`);
                 const handled = handleKvServerMessage(kv, session);
+                // Content-as-id reads are answered by echoing the id back (`echoed`); only a
+                // hash we cannot serve means the checkpoint references state we lost.
+                if (handled?.kind === "get" && !handled.found && !handled.echoed)
+                    blobMiss = true;
                 if (handled) {
                     try {
                         await writeWithBackpressure(session.stream, handled.reply, `KV ${handled.kind}_blob reply id=${handled.id}`);
@@ -3376,23 +3528,73 @@ function extractToolResults(prompt) {
  * messages after the last non-tool message. Mid-prompt historical tool results
  * are ignored — they are conversation history, not replies for a held-open Run.
  */
+// OpenCode 2.x appends these host notes after the tool results of a step:
+// mid-turn system updates (skill / MCP availability changes) are lowered to a
+// user message wrapping `<system-update>`, and tool-result media is re-sent as
+// a user message starting with this caption.
+const SYSTEM_UPDATE_OPEN = "<system-update>";
+const SYSTEM_UPDATE_CLOSE = "</system-update>";
+const TOOL_MEDIA_CAPTION = "Attached media from tool result:";
+function hostTailNote(message) {
+    if (message.role === "system")
+        return { text: message.content };
+    if (message.role !== "user" || !Array.isArray(message.content) || message.content.length === 0)
+        return undefined;
+    const [first] = message.content;
+    if (first?.type === "text" && first.text === TOOL_MEDIA_CAPTION)
+        return {};
+    const texts = [];
+    for (const part of message.content) {
+        if (part.type !== "text")
+            return undefined;
+        const text = part.text.trim();
+        if (!text.startsWith(SYSTEM_UPDATE_OPEN) || !text.endsWith(SYSTEM_UPDATE_CLOSE))
+            return undefined;
+        texts.push(text);
+    }
+    return { text: texts.join("\n") };
+}
+/**
+ * Split off host notes that trail the live tool results. They are not a new
+ * user turn: the held Run must still receive its tool results.
+ */
+function liveTail(prompt) {
+    let end = prompt.length;
+    const notes = [];
+    while (end > 0) {
+        const note = hostTailNote(prompt[end - 1]);
+        if (!note)
+            break;
+        if (note.text)
+            notes.unshift(note.text);
+        end--;
+    }
+    return { end, notes };
+}
 export function extractTrailingToolResults(prompt) {
-    if (prompt.length === 0)
-        return [];
-    let i = prompt.length - 1;
+    const { end, notes } = liveTail(prompt);
+    let i = end - 1;
     while (i >= 0 && prompt[i].role === "tool")
         i--;
-    // Continuations end with tool messages. Anything else (user/assistant/system)
+    // Continuations end with tool messages. Anything else (user/assistant)
     // means this is a fresh model call that merely carries tools in history.
-    if (i === prompt.length - 1)
+    if (i === end - 1)
         return [];
-    return extractToolResults(prompt.slice(i + 1));
+    const results = extractToolResults(prompt.slice(i + 1, end));
+    // A Run continuation only carries exec results, so the host notes ride on the
+    // last one; otherwise Cursor would never see e.g. a removed skill.
+    const last = results.at(-1);
+    if (last && notes.length > 0) {
+        results[results.length - 1] = { ...last, output: [last.output, ...notes].filter(Boolean).join("\n\n") };
+    }
+    return results;
 }
 /** Detect a host-owned canonical plan review, excluding Cursor exec replies. */
 export function hasApprovedUncorrelatedPlanStageResult(prompt) {
-    if (prompt.length === 0 || prompt[prompt.length - 1].role !== "tool")
+    const { end } = liveTail(prompt);
+    if (end === 0 || prompt[end - 1].role !== "tool")
         return false;
-    for (let i = prompt.length - 1; i >= 0 && prompt[i].role === "tool"; i--) {
+    for (let i = end - 1; i >= 0 && prompt[i].role === "tool"; i--) {
         const message = prompt[i];
         if (!Array.isArray(message.content))
             continue;
@@ -3443,9 +3645,8 @@ function extractSystemPrompt(prompt) {
     return parts.length > 0 ? parts.join("\n\n") : undefined;
 }
 /**
- * Checkpointed Runs do not resend the system prompt. Keep the workspace root
- * on the live user message, and require absolute `path` arguments when that is
- * the host's file-tool dialect.
+ * Keep the workspace root on a checkpointed turn's live user message too, and
+ * require absolute `path` arguments when that is the host's file-tool dialect.
  */
 export function groundCheckpointTurnText(userText, checkpoint, workspaceRoot, tools) {
     if (!checkpoint)
@@ -3692,10 +3893,45 @@ function appendSeedHistory(out, role, content) {
     }
     out.push({ role, content });
 }
+/** Share of the target context a foreign-history rebase may fill before compaction. */
+export const FOREIGN_HISTORY_REBASE_CONTEXT_SHARE = 0.8;
+/**
+ * A foreign-history rebase replays the full host history. When that cannot fit,
+ * fail before opening a Run with an error hosts classify as context overflow
+ * (HTTP 413 + "prompt is too long"), so the host compacts and retries.
+ */
+export function assertForeignHistoryRebaseFits(input) {
+    const documented = getDocumentedCursorModelContext(input.cursorModelId);
+    const limit = input.maxMode
+        ? (input.modelInfo?.maxContextForMaxMode ?? documented?.maxContextForMaxMode ?? 1_000_000)
+        : (input.modelInfo?.maxContext ?? documented?.maxContext ?? 200_000);
+    const chars = input.history.reduce((sum, message) => sum + message.content.length, 0)
+        + (input.systemPrompt?.length ?? 0)
+        + input.userText.length;
+    const tokens = estimateTokens(chars);
+    const budget = Math.floor(limit * FOREIGN_HISTORY_REBASE_CONTEXT_SHARE);
+    if (tokens <= budget)
+        return;
+    trace(`foreign-history rebase too large: model=${input.cursorModelId} estimatedTokens=${tokens} ` +
+        `budget=${budget} limit=${limit} → requesting host compaction`);
+    throw new APICallError({
+        message: `prompt is too long: rebasing this session onto Cursor needs ~${tokens} tokens, ` +
+            `over ${budget} of the ${limit}-token context`,
+        url: "cursor://agent.v1.AgentService/Run",
+        requestBodyValues: {},
+        statusCode: 413,
+        isRetryable: false,
+    });
+}
 /** OpenCode session id header, if present. */
 export function opencodeSessionKey(callOptions) {
     const h = callOptions.headers ?? {};
-    const raw = h["x-session-id"] ??
+    // OpenCode 2.x sends x-session-id / x-session-affinity / x-opencode-session
+    // as the parent (or fork source) session so subagents share prompt-cache
+    // affinity. Only x-opencode-session-id names the requesting session; keying
+    // on the others makes a subagent take over its parent's Cursor conversation.
+    const raw = h["x-opencode-session-id"] ??
+        h["x-session-id"] ??
         h["X-Session-Id"] ??
         h["x-session-affinity"] ??
         h["x-opencode-session"];
@@ -3712,6 +3948,63 @@ export function resolveConversationId(callOptions) {
     return bindConversationId(opencodeSessionKey(callOptions)).conversationId;
 }
 export { sessionIdToUuid } from "./protocol/conversation-bind.js";
+/**
+ * Grow the held Run's advertised + permitted catalog from this `doStream`
+ * call. Continuation skips `startSession`, so without this, exec #36 and
+ * permission keep the freeze from Run open. MCP server ids stay those of the
+ * Run's one merged-config load (`startSession`); a tool that connects later
+ * still gets its identity from that set.
+ */
+export async function refreshHeldSessionToolCatalog(session, callOptions) {
+    const sessionKey = session.openCodeSessionId;
+    const incomingTools = extractTools(callOptions);
+    const providerOptions = callOptions.providerOptions?.cursor;
+    const compactionOption = providerOptions?.[CURSOR_COMPACTION_OPTION];
+    const isCompaction = compactionOption === true || (compactionOption === undefined && !!sessionKey && isCompactionSession(sessionKey));
+    const toolState = await resolveTurnToolState({
+        sessionKey,
+        incomingTools,
+        toolChoice: callOptions.toolChoice,
+        isCompaction,
+        abortSignal: callOptions.abortSignal,
+    });
+    // A standalone caller has no host session key for the process catalog cache.
+    // Its held Run still owns an epoch: keep its prefix and append new names.
+    const cachedTools = !sessionKey ? session.toolCatalog ?? [] : [];
+    const cachedNames = new Set(cachedTools.map(tool => tool.name));
+    const advertisedTools = cachedTools.length > 0
+        ? [...cachedTools, ...toolState.advertisedTools.filter(tool => !cachedNames.has(tool.name))]
+        : toolState.advertisedTools;
+    const webToolAliases = buildCustomWebToolAliases(advertisedTools);
+    const cursorTools = webToolAliases.advertisedTools;
+    const knownMcpServers = session.knownMcpServers ?? [];
+    const discoveredSubagentCatalog = extractHostSubagentCatalog(cursorTools);
+    const contextSubagents = Array.isArray(session.requestContext.custom_subagents)
+        ? session.requestContext.custom_subagents
+            .map((agent) => agent && typeof agent === "object" && typeof agent.name === "string"
+            ? {
+                name: agent.name,
+                description: typeof agent.description === "string"
+                    ? agent.description
+                    : undefined,
+            }
+            : undefined)
+            .filter((agent) => !!agent)
+        : [];
+    session.toolCatalog = sessionKey ? snapshotToolCatalog(sessionKey) : structuredClone(advertisedTools);
+    session.toolDescriptors = toolsToDescriptors(cursorTools, "opencode", knownMcpServers);
+    session.toolAliases = webToolAliases.aliases;
+    session.hostToolDialect = hostToolDialectFromTools(advertisedTools, session.hostToolDialect);
+    session.subagentCatalog = {
+        ...discoveredSubagentCatalog,
+        agents: [...new Map([...discoveredSubagentCatalog.agents, ...contextSubagents]
+                .map((agent) => [agent.name, agent])).values()],
+    };
+    session.allowTools = toolState.allowTools;
+    session.permittedToolNames = new Set(toolState.allowTools
+        ? incomingTools.map((tool) => tool.name).filter((name) => !!name)
+        : []);
+}
 function extractTools(callOptions) {
     const tools = callOptions.tools;
     if (!tools || tools.length === 0) {

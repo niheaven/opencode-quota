@@ -268,7 +268,7 @@ function createAgyActivityRequestId() {
 import os from "os";
 
 // src/sdk/agy-cli-version.ts
-var AGY_CLI_VERSION = "1.2.14";
+var AGY_CLI_VERSION = "1.2.17";
 
 // src/sdk/user-agent.ts
 var cachedUserAgent = null;
@@ -16046,8 +16046,12 @@ var models_default = {
             "gemini-3.6-flash-low",
             "gemini-pro-agent",
             "gemini-3.1-pro-low",
-            "claude-sonnet-4-6",
-            "claude-opus-4-6-thinking",
+            "claude-opus-5-5-low",
+            "claude-opus-5-5-medium",
+            "claude-opus-5-5-high",
+            "claude-sonnet-5-5-low",
+            "claude-sonnet-5-5-medium",
+            "claude-sonnet-5-5-high",
             "gpt-oss-120b-medium"
           ]
         }
@@ -16072,9 +16076,8 @@ var models_default = {
     }
   },
   experimentIds: [
-    106329237,
+    106560668,
     106760947,
-    106519115,
     105979552,
     105979574,
     106015333,
@@ -16084,14 +16087,14 @@ var models_default = {
     106123599,
     106121401,
     106100625,
+    106754391,
     106143956,
     105856899,
     106064030,
-    106106760,
+    106544525,
     106021688,
     105887299,
     106428370,
-    106283618,
     106640126,
     106380926,
     106281951,
@@ -16100,6 +16103,7 @@ var models_default = {
     106032303,
     106228452,
     106121607,
+    106793059,
     105979531,
     105979553,
     106015328,
@@ -16110,11 +16114,11 @@ var models_default = {
     106100654,
     106064028,
     105906495,
-    106283614,
     106640124,
     106038164,
     106032301,
-    106121604
+    106121604,
+    106793057
   ],
   imageGenerationModelIds: [
     "gemini-3.1-flash-image"
@@ -16152,29 +16156,26 @@ var models_default = {
       supportsEstimateTokenCounter: true,
       toolFormatterType: "TOOL_FORMATTER_TYPE_XML"
     },
-    "claude-opus-4-6-thinking": {
+    "claude-opus-5-5-high": {
       apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
-      displayName: "Claude Opus 4.6 (Thinking)",
-      maxOutputTokens: 64e3,
-      maxTokens: 25e4,
-      model: "MODEL_PLACEHOLDER_M26",
+      displayName: "Claude Opus 5.5 (High)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M402",
       modelExperiments: {
         experiments: {
           CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
-            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_UNSPECIFIED",\n    "max_token_limit": "160000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": false,\n    "is_sync": false,\n    "max_user_requests": 10,\n    "include_last_user_message": false,\n    "include_conversation_log": true,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 0,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
           },
           retry_model_capacity_exhausted: {
             boolValue: true
-          },
-          template__system_prompts__planning_mode_artifacts: {
-            stringValue: "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
           }
         }
       },
       modelProvider: "MODEL_PROVIDER_ANTHROPIC",
       quotaInfo: {
         remainingFraction: 1,
-        resetTime: "2026-09-30T12:45:45Z"
+        resetTime: "2026-10-06T00:32:08Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16186,34 +16187,33 @@ var models_default = {
         "video/jpeg2000": true,
         "video/videoframe/jpeg2000": true
       },
+      supportsAdaptiveThinking: true,
       supportsImages: true,
       supportsThinking: true,
-      thinkingBudget: 1024,
-      vertexModelId: "claude-opus-4-6@default"
+      tagTitle: "New",
+      thinkingLevel: 3,
+      vertexModelId: "claude-opus-5-5@default"
     },
-    "claude-sonnet-4-6": {
+    "claude-opus-5-5-low": {
       apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
-      displayName: "Claude Sonnet 4.6 (Thinking)",
-      maxOutputTokens: 64e3,
-      maxTokens: 25e4,
-      model: "MODEL_PLACEHOLDER_M35",
+      displayName: "Claude Opus 5.5 (Low)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M400",
       modelExperiments: {
         experiments: {
           CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
-            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_UNSPECIFIED",\n    "max_token_limit": "160000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": false,\n    "is_sync": false,\n    "max_user_requests": 10,\n    "include_last_user_message": false,\n    "include_conversation_log": true,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 0,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
           },
           retry_model_capacity_exhausted: {
             boolValue: true
-          },
-          template__system_prompts__planning_mode_artifacts: {
-            stringValue: "When in planning mode, you will work with three special artifacts.\n\n# Tasks\nPath: {{ArtifactDirectoryPath}}/task.md\n\n**Purpose**: A TODO list to organize your work during execution. Create this artifact after receiving user approval on your implementation plan. Break down complex tasks into component-level items and track progress as a living document.\n\n**Format**:\n```markdown\n- `[ ]` uncompleted tasks\n- `[/]` in progress tasks (custom notation)\n- `[x]` completed tasks\n- Use indented lists for sub-items\n```\n\n**Updating task.md**: Mark items as `[/]` when starting work on them, and `[x]` when completed. Update task.md as you make progress through your checklist.\n\n# Implementation Plan\nPath: {{ArtifactDirectoryPath}}/implementation_plan.md\n\n**Purpose**: A detailed design document to present your technical implementation plan to the user for feedback and approval.\nAfter reading the document, the user should understand the key technical details of your plan, and be able to make an informed decision on whether to approve it.\n\n**Format**: Use the following format, omitting any irrelevant sections.\n```markdown\n# [Goal Description]\n\nProvide a brief description of the problem, any background context, and what the change accomplishes.\n\n## User Review Required\n\nDocument anything that requires user review or feedback, for example, breaking changes or significant design decisions. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Open Questions\n\nAny clarifying or design questions for the user that will impact the implementation plan. Use GitHub alerts (IMPORTANT/WARNING/CAUTION) to highlight critical items.\n\n## Proposed Changes\n\nGroup files by component (e.g., package, feature area, dependency layer) and order logically (dependencies first). Separate components with horizontal rules for visual clarity.\n\n### [Component Name]\n\nSummary of what will change in this component, separated by files. For specific files, Use [NEW] and [DELETE] to demarcate new and deleted files, for example:\n\n#### [MODIFY] [file basename](file:///absolute/path/to/modifiedfile)\n#### [NEW] [file basename](file:///absolute/path/to/newfile)\n#### [DELETE] [file basename](file:///absolute/path/to/deletedfile)\n\n## Verification Plan\n\nSummary of how you will verify that your changes have the desired effects.\n\n### Automated Tests\n- The commands of any automated tests you'll run.\n\n### Manual Verification\n- Asking the user to deploy to staging and testing, verifying UI changes on an iOS app etc.\n```\n\n# Walkthrough\nPath: {{ArtifactDirectoryPath}}/walkthrough.md\n\n**Purpose**: After completing work, summarize what you accomplished. Update an existing walkthrough for related follow-up work rather than creating a new one.\n\n**Document**:\n- Changes made\n- What was tested\n- Validation results\n\nEmbed screenshots and recordings to visually demonstrate UI changes and user flows.\n"
           }
         }
       },
       modelProvider: "MODEL_PROVIDER_ANTHROPIC",
       quotaInfo: {
         remainingFraction: 1,
-        resetTime: "2026-09-30T12:45:45Z"
+        resetTime: "2026-10-06T00:32:08Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16225,10 +16225,164 @@ var models_default = {
         "video/jpeg2000": true,
         "video/videoframe/jpeg2000": true
       },
+      supportsAdaptiveThinking: true,
       supportsImages: true,
       supportsThinking: true,
-      thinkingBudget: 1024,
-      vertexModelId: "claude-sonnet-4-6@default"
+      tagTitle: "New",
+      thinkingLevel: 1,
+      vertexModelId: "claude-opus-5-5@default"
+    },
+    "claude-opus-5-5-medium": {
+      apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
+      displayName: "Claude Opus 5.5 (Medium)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M401",
+      modelExperiments: {
+        experiments: {
+          CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+          },
+          retry_model_capacity_exhausted: {
+            boolValue: true
+          }
+        }
+      },
+      modelProvider: "MODEL_PROVIDER_ANTHROPIC",
+      quotaInfo: {
+        remainingFraction: 1,
+        resetTime: "2026-10-06T00:32:08Z"
+      },
+      recommended: true,
+      supportedMimeTypes: {
+        "image/heic": true,
+        "image/heif": true,
+        "image/jpeg": true,
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true
+      },
+      supportsAdaptiveThinking: true,
+      supportsImages: true,
+      supportsThinking: true,
+      tagTitle: "New",
+      thinkingLevel: 2,
+      vertexModelId: "claude-opus-5-5@default"
+    },
+    "claude-sonnet-5-5-high": {
+      apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
+      displayName: "Claude Sonnet 5.5 (High)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M405",
+      modelExperiments: {
+        experiments: {
+          CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+          },
+          retry_model_capacity_exhausted: {
+            boolValue: true
+          }
+        }
+      },
+      modelProvider: "MODEL_PROVIDER_ANTHROPIC",
+      quotaInfo: {
+        remainingFraction: 1,
+        resetTime: "2026-10-06T00:32:08Z"
+      },
+      recommended: true,
+      supportedMimeTypes: {
+        "image/heic": true,
+        "image/heif": true,
+        "image/jpeg": true,
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true
+      },
+      supportsAdaptiveThinking: true,
+      supportsImages: true,
+      supportsThinking: true,
+      tagTitle: "New",
+      thinkingLevel: 3,
+      vertexModelId: "claude-sonnet-5-5@default"
+    },
+    "claude-sonnet-5-5-low": {
+      apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
+      displayName: "Claude Sonnet 5.5 (Low)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M403",
+      modelExperiments: {
+        experiments: {
+          CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+          },
+          retry_model_capacity_exhausted: {
+            boolValue: true
+          }
+        }
+      },
+      modelProvider: "MODEL_PROVIDER_ANTHROPIC",
+      quotaInfo: {
+        remainingFraction: 1,
+        resetTime: "2026-10-06T00:32:08Z"
+      },
+      recommended: true,
+      supportedMimeTypes: {
+        "image/heic": true,
+        "image/heif": true,
+        "image/jpeg": true,
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true
+      },
+      supportsAdaptiveThinking: true,
+      supportsImages: true,
+      supportsThinking: true,
+      tagTitle: "New",
+      thinkingLevel: 1,
+      vertexModelId: "claude-sonnet-5-5@default"
+    },
+    "claude-sonnet-5-5-medium": {
+      apiProvider: "API_PROVIDER_ANTHROPIC_VERTEX",
+      displayName: "Claude Sonnet 5.5 (Medium)",
+      maxOutputTokens: 128e3,
+      maxTokens: 1e6,
+      model: "MODEL_PLACEHOLDER_M404",
+      modelExperiments: {
+        experiments: {
+          CASCADE_USE_EXPERIMENT_CHECKPOINTER: {
+            stringValue: '{\n    "strategy": "CHECKPOINT_STRATEGY_SAME_MODEL",\n    "max_token_limit": "256000",\n    "token_threshold": "50000",\n    "max_overhead_ratio": "0.15",\n    "moving_window_size": "1",\n    "enabled": true,\n    "max_output_tokens": "16384",\n    "checkpoint_model": "MODEL_PLACEHOLDER_M50",\n    "use_last_planner_model": true,\n    "is_sync": true,\n    "max_user_requests": 10,\n    "include_last_user_message": true,\n    "include_conversation_log": false,\n    "include_running_task_snapshots": true,\n    "include_subagent_snapshots": true,\n    "include_artifact_snapshots": true,\n    "retry_config": {\n        "max_retries": 4,\n        "initial_sleep_duration_ms": 1000,\n        "exponential_multiplier": 2,\n        "include_error_feedback": false\n    },\n    "session_summary_prompt_override": ""\n}'
+          },
+          retry_model_capacity_exhausted: {
+            boolValue: true
+          }
+        }
+      },
+      modelProvider: "MODEL_PROVIDER_ANTHROPIC",
+      quotaInfo: {
+        remainingFraction: 1,
+        resetTime: "2026-10-06T00:32:08Z"
+      },
+      recommended: true,
+      supportedMimeTypes: {
+        "image/heic": true,
+        "image/heif": true,
+        "image/jpeg": true,
+        "image/png": true,
+        "image/webp": true,
+        "video/jpeg2000": true,
+        "video/videoframe/jpeg2000": true
+      },
+      supportsAdaptiveThinking: true,
+      supportsImages: true,
+      supportsThinking: true,
+      tagTitle: "New",
+      thinkingLevel: 2,
+      vertexModelId: "claude-sonnet-5-5@default"
     },
     "gemini-2.5-flash": {
       apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
@@ -16249,8 +16403,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16311,7 +16465,7 @@ var models_default = {
       supportsVideo: true,
       tagDescription: "gemini-3.5-flash-lite",
       thinkingBudget: -1,
-      thinkingLevel: 3
+      thinkingLevel: 1
     },
     "gemini-2.5-flash-lite": {
       apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
@@ -16332,8 +16486,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16394,7 +16548,7 @@ var models_default = {
       supportsVideo: true,
       tagDescription: "gemini-3.5-flash-lite",
       thinkingBudget: -1,
-      thinkingLevel: 3
+      thinkingLevel: 1
     },
     "gemini-2.5-flash-thinking": {
       apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
@@ -16415,8 +16569,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16477,7 +16631,7 @@ var models_default = {
       supportsVideo: true,
       tagDescription: "gemini-3.5-flash-lite",
       thinkingBudget: -1,
-      thinkingLevel: 3
+      thinkingLevel: 1
     },
     "gemini-2.5-pro": {
       apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
@@ -16495,8 +16649,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       requiresImageOutputOutsideFunctionResponses: true,
@@ -16576,8 +16730,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16681,8 +16835,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16741,8 +16895,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: -1
     },
     "gemini-3.1-flash-image": {
@@ -16751,8 +16903,8 @@ var models_default = {
       model: "MODEL_PLACEHOLDER_M21",
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       }
     },
     "gemini-3.1-flash-lite": {
@@ -16770,8 +16922,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       }
     },
     "gemini-3.1-pro-high": {
@@ -16802,8 +16954,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16893,8 +17045,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -16998,8 +17150,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17058,8 +17210,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 1e3
     },
     "gemini-3.5-flash-lite": {
@@ -17081,8 +17231,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17143,7 +17293,7 @@ var models_default = {
       supportsVideo: true,
       tagDescription: "gemini-3.5-flash-lite",
       thinkingBudget: -1,
-      thinkingLevel: 3
+      thinkingLevel: 1
     },
     "gemini-3.5-flash-low": {
       apiProvider: "API_PROVIDER_GOOGLE_GEMINI",
@@ -17188,8 +17338,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17248,8 +17398,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 4e3
     },
     "gemini-3.6-flash-high": {
@@ -17307,8 +17455,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17367,8 +17515,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: -1
     },
     "gemini-3.6-flash-low": {
@@ -17426,8 +17572,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17486,8 +17632,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 1e3
     },
     "gemini-3.6-flash-medium": {
@@ -17545,8 +17689,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17605,8 +17749,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 4e3
     },
     "gemini-3.6-flash-tiered": {
@@ -17663,8 +17805,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17774,8 +17916,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17834,8 +17976,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: -1
     },
     "gemini-3.7-flash-low": {
@@ -17887,8 +18027,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -17947,8 +18087,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 1e3
     },
     "gemini-3.7-flash-medium": {
@@ -18000,8 +18138,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18060,8 +18198,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 4e3
     },
     "gemini-3.7-flash-tiered": {
@@ -18112,8 +18248,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18223,8 +18359,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18283,8 +18419,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: -1
     },
     "gemini-3.8-flash-low": {
@@ -18336,8 +18470,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18396,8 +18530,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 1e3
     },
     "gemini-3.8-flash-medium": {
@@ -18449,8 +18581,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18509,8 +18641,6 @@ var models_default = {
       supportsImages: true,
       supportsThinking: true,
       supportsVideo: true,
-      tagDescription: "Limited time",
-      tagTitle: "Fast",
       thinkingBudget: 4e3
     },
     "gemini-3.8-flash-tiered": {
@@ -18561,8 +18691,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18651,8 +18781,8 @@ var models_default = {
       },
       modelProvider: "MODEL_PROVIDER_GOOGLE",
       quotaInfo: {
-        remainingFraction: 0.9673149,
-        resetTime: "2026-09-30T12:41:07Z"
+        remainingFraction: 0.9418832,
+        resetTime: "2026-10-05T19:38:35Z"
       },
       recommended: true,
       supportedMimeTypes: {
@@ -18729,10 +18859,12 @@ var models_default = {
       modelProvider: "MODEL_PROVIDER_OPENAI",
       quotaInfo: {
         remainingFraction: 1,
-        resetTime: "2026-09-30T12:45:45Z"
+        resetTime: "2026-10-06T00:32:08Z"
       },
       recommended: true,
       supportsThinking: true,
+      tagDescription: "GPT-OSS will be removed from Antigravity on November 2, 2026.",
+      tagTitle: "Notice",
       thinkingBudget: 8192,
       vertexModelId: "openai/gpt-oss-120b-maas"
     },
@@ -19529,6 +19661,34 @@ function getModelEnum(modelName) {
   }
   return "MODEL_PLACEHOLDER_M16";
 }
+function isClaudeModel(model) {
+  return model.toLowerCase().includes("claude");
+}
+function sanitizeClaudeThinkingParts(contents, model) {
+  if (!isClaudeModel(model) || !Array.isArray(contents)) {
+    return;
+  }
+  for (const turn of contents) {
+    if (!turn || typeof turn !== "object") continue;
+    if (turn.role !== "model" && turn.role !== "assistant") continue;
+    if (!Array.isArray(turn.parts)) continue;
+    const filteredParts = turn.parts.filter((part) => {
+      if (!part || typeof part !== "object") return true;
+      const isThinking = part.thought === true || part.type === "thinking" || typeof part.thinking === "string";
+      if (!isThinking) {
+        return true;
+      }
+      const sig = typeof part.signature === "string" ? part.signature : typeof part.thoughtSignature === "string" ? part.thoughtSignature : void 0;
+      const isValidSig = typeof sig === "string" && sig.length > 0 && sig !== "skip_thought_signature_validator";
+      return isValidSig;
+    });
+    if (filteredParts.length === 0) {
+      turn.parts = [{ text: "" }];
+    } else {
+      turn.parts = filteredParts;
+    }
+  }
+}
 function transformRequestBody(body, projectId, effectiveModel, requestedModel, thinkingConfigDefaults) {
   const fallbackId = randomUUID3();
   try {
@@ -19562,7 +19722,7 @@ function transformRequestBody(body, projectId, effectiveModel, requestedModel, t
           last_step_index: "0",
           model_enum: getModelEnum(effectiveModel),
           trajectory_id: randomUUID3(),
-          used_claude: "false",
+          used_claude: isClaudeModel(effectiveModel) || isClaudeModel(requestedModel) ? "true" : "false",
           used_claude_conservative: "false"
         };
       }
@@ -19590,6 +19750,7 @@ function transformRequestBody(body, projectId, effectiveModel, requestedModel, t
         contents2 = ensureTrailingUserTurn(contents2);
         const latestSig = getLatestSignature(sessionId2);
         applyLatestSignature(contents2, latestSig);
+        sanitizeClaudeThinkingParts(contents2, effectiveModel || requestedModel);
         requestPayloadInside.contents = contents2;
       }
       return { body: JSON.stringify(wrappedBody2), userPromptId: userPromptId2, sessionId: sessionId2 };
@@ -19631,6 +19792,7 @@ function transformRequestBody(body, projectId, effectiveModel, requestedModel, t
       contents = ensureTrailingUserTurn(contents);
       const latestSig = getLatestSignature(sessionId);
       applyLatestSignature(contents, latestSig);
+      sanitizeClaudeThinkingParts(contents, effectiveModel || requestedModel);
       requestPayload.contents = contents;
     }
     if ("model" in requestPayload) {
@@ -19642,7 +19804,7 @@ function transformRequestBody(body, projectId, effectiveModel, requestedModel, t
         last_step_index: "0",
         model_enum: getModelEnum(effectiveModel),
         trajectory_id: randomUUID3(),
-        used_claude: "false",
+        used_claude: isClaudeModel(effectiveModel) || isClaudeModel(requestedModel) ? "true" : "false",
         used_claude_conservative: "false"
       };
     }
@@ -20345,20 +20507,20 @@ var STATIC_MODELS_SIMPLE = {
     reasoning: true,
     attachment: true
   },
-  "claude-sonnet-4-6": {
-    name: "Claude Sonnet 4.6 (Thinking)",
-    description: "Claude Sonnet 4.6 deep reasoning model, perfectly balancing thinking process, processing speed, and output quality.",
-    maxTokens: 25e4,
-    maxOutputTokens: 64e3,
+  "claude-opus-5-5": {
+    name: "Claude Opus 5.5",
+    description: "Claude Opus 5.5 deep reasoning model. Select tier at runtime.",
+    maxTokens: 1e6,
+    maxOutputTokens: 128e3,
     toolCall: true,
     reasoning: true,
     attachment: true
   },
-  "claude-opus-4-6-thinking": {
-    name: "Claude Opus 4.6 (Thinking)",
-    description: "Claude Opus 4.6 deep reasoning model, built-in chain of thought, highly suitable for top-tier algorithm and logic puzzles.",
-    maxTokens: 25e4,
-    maxOutputTokens: 64e3,
+  "claude-sonnet-5-5": {
+    name: "Claude Sonnet 5.5",
+    description: "Claude Sonnet 5.5 deep reasoning model. Select tier at runtime.",
+    maxTokens: 1e6,
+    maxOutputTokens: 128e3,
     toolCall: true,
     reasoning: true,
     attachment: true
@@ -20393,6 +20555,16 @@ var TIER_MAPPING = {
   "gemini-3.1-pro": {
     low: "gemini-3.1-pro-low",
     high: "gemini-3.1-pro-high"
+  },
+  "claude-opus-5-5": {
+    low: "claude-opus-5-5-low",
+    medium: "claude-opus-5-5-medium",
+    high: "claude-opus-5-5-high"
+  },
+  "claude-sonnet-5-5": {
+    low: "claude-sonnet-5-5-low",
+    medium: "claude-sonnet-5-5-medium",
+    high: "claude-sonnet-5-5-high"
   }
 };
 function resolveModelTier(baseModelId, headersOrInit) {

@@ -7,6 +7,8 @@ export declare function hydrateConversationState(cacheDir: string, sessionKey: s
     hostAgent?: string;
     systemPromptHash?: string;
 } | undefined>;
+/** Restore only turn provenance when its in-memory entry was evicted. */
+export declare function hydrateTurnProvenance(cacheDir: string, sessionKey: string): Promise<void>;
 /** Persist the complete resumable state only after Cursor confirms TurnEnded. */
 export declare function persistConversationState(cacheDir: string, input: {
     sessionKey: string;

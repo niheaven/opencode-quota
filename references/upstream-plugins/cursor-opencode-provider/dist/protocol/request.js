@@ -1,14 +1,17 @@
 import { encodeMessage, getMessageTypes } from "./messages.js";
-import { toolsToDescriptors } from "./tools.js";
 /**
  * Seed ConversationStateStructure for the first turn (no checkpoint yet).
  *
- * OpenCode needs a system prompt channel; we put it in root_prompt_messages_json
- * as a JSON chat message. After the first checkpoint arrives we stop inventing
- * state and echo the server's opaque structure instead (CLI behavior).
+ * After the first checkpoint arrives we stop inventing state and echo the
+ * server's opaque structure instead (CLI behavior). Compaction resets and
+ * rebases also use this seed, with `history` carrying OpenCode's prompt turns
+ * so Cursor can continue without the old checkpoint.
  *
- * Compaction resets also use this seed, with `history` carrying OpenCode's
- * compacted prompt turns so Cursor can summarize without the old checkpoint.
+ * No `system` entry is seeded: Cursor does not follow a client-authored
+ * `system` root message, and neither Cursor client writes
+ * `root_prompt_messages_json`. Host system context travels as the
+ * system-instructions rule in RequestContext (`systemInstructionsRule`), so
+ * `system` history entries are dropped here rather than duplicated.
  *
  * We deliberately do NOT use `AgentRunRequest.custom_system_prompt` (#8): that
  * field is the internal `--system-prompt` CLI override and the server rejects
@@ -18,14 +21,8 @@ export function buildSeedConversationState(input) {
     const root = getMessageTypes();
     const type = root.lookupType("ConversationStateStructure");
     const messages = [];
-    if (input?.systemPrompt && input.systemPrompt.length > 0) {
-        messages.push(JSON.stringify({ role: "system", content: input.systemPrompt }));
-    }
     for (const entry of input?.history ?? []) {
-        if (!entry.content)
-            continue;
-        // Avoid duplicating the system prompt when history also carries one.
-        if (entry.role === "system" && input?.systemPrompt)
+        if (!entry.content || entry.role === "system")
             continue;
         messages.push(JSON.stringify({ role: entry.role, content: entry.content }));
     }
@@ -42,11 +39,9 @@ export function buildSeedConversationState(input) {
  */
 export function buildRunRequest(input) {
     const msgId = input.messageId ?? crypto.randomUUID();
-    // Advertise opencode's tools on the LIVE path: UserMessageAction.request_context
-    // (#2). AgentRunRequest.mcp_tools (#4) is prewarm-only / empty on real turns —
-    // putting tools only there is why the model fell back to native Grep/Read.
-    const tools = input.tools ?? [];
-    const mcpTools = input.toolDescriptors ?? (tools.length > 0 ? toolsToDescriptors(tools) : []);
+    // Advertise host tools on UserMessageAction.request_context (#2) via slim
+    // mcp_meta_tool_options. AgentRunRequest.mcp_tools (#4) stays empty on real
+    // turns (CLI prewarm-only). Full defs are session.toolDescriptors + exec #36.
     const requestContext = input.requestContext;
     const userMessage = {
         text: input.text,
@@ -70,10 +65,7 @@ export function buildRunRequest(input) {
         : { user_message_action: userMessageAction };
     const conversationState = input.conversationState && input.conversationState.length > 0
         ? input.conversationState
-        : buildSeedConversationState({
-            systemPrompt: input.systemPrompt,
-            history: input.history,
-        });
+        : buildSeedConversationState({ history: input.history });
     const runRequest = {
         conversation_id: input.conversationId,
         conversation_group_id: input.conversationGroupId ?? input.conversationId,
@@ -88,9 +80,7 @@ export function buildRunRequest(input) {
             parameters: input.parameterValues ?? [],
         },
         conversation_state: conversationState,
-        // Keep #4 populated too (harmless on real turns; useful for prewarm /
-        // older server builds that still read it).
-        mcp_tools: { mcp_tools: mcpTools },
+        mcp_tools: { mcp_tools: [] },
         unknown_flag: 0,
         field_12: 0,
     };

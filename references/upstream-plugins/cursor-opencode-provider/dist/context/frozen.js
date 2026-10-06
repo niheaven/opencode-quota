@@ -1,7 +1,6 @@
-import { buildDynamicRequestContext, buildRequestContext, materializeRequestContext, requestContextBase, } from "./build.js";
+import { buildDynamicRequestContext, buildRequestContext, materializeRequestContext, requestContextBase, withSystemInstructions, } from "./build.js";
 import { clearContextEpoch, endContextEpoch, resetContextEpochsForTests } from "./epoch.js";
 import { clearOverlayHold, resetOverlayHoldsForTests, transferOverlayHold, } from "./overlay.js";
-import { clearSkillCatalogAdmission, resetSkillCatalogAdmissionsForTests, transferSkillCatalogAdmission, } from "./dynamic-catalog.js";
 import { trace } from "../debug.js";
 import { encodeMessage } from "../protocol/messages.js";
 /**
@@ -11,10 +10,10 @@ import { encodeMessage } from "../protocol/messages.js";
  * base plus live plugin/tool overlays. Rebuilding volatile git/layout data on
  * every Run shifts the prompt prefix and tanks prompt-cache hits.
  *
- * Skills, subagents, plugin metadata, and tool/MCP capabilities are rediscovered
- * each Run, then epoch-held (equal ids keep frozen bytes; new ids append) and
- * overlaid on that base. If the encoded overlay bytes did not change, the exact
- * prior materialized object is reused.
+ * Host-advertised subagents, plugin metadata, and tool/MCP capabilities are
+ * rediscovered each Run, then epoch-held (equal ids keep frozen bytes; new ids
+ * append) and overlaid on that base. If the encoded overlay bytes did not
+ * change, the exact prior materialized object is reused.
  */
 const byConversationId = new Map();
 const materializedByConversationId = new Map();
@@ -45,7 +44,6 @@ function remember(conversationId, context) {
         byConversationId.delete(oldest);
         materializedByConversationId.delete(oldest);
         clearOverlayHold(oldest);
-        clearSkillCatalogAdmission(oldest);
     }
 }
 /** Frozen stable RequestContext base for this conversation, if any. */
@@ -69,7 +67,6 @@ export function clearFrozenRequestContext(conversationId) {
     byConversationId.delete(conversationId);
     materializedByConversationId.delete(conversationId);
     clearOverlayHold(conversationId);
-    clearSkillCatalogAdmission(conversationId);
     clearContextEpoch(conversationId);
 }
 /**
@@ -87,12 +84,11 @@ export function transferFrozenRequestContext(previousConversationId, nextConvers
     const base = byConversationId.get(previousConversationId);
     const materialized = materializedByConversationId.get(previousConversationId);
     // System Context epoch does not transfer — compaction starts a fresh baseline.
-    // Overlay hold does transfer: same workspace, same advertised skill/agent/plugin
+    // Overlay hold does transfer: same workspace, same advertised agent/plugin
     // bytes, so the comparison seed can still match. clearFrozenRequestContext
     // also drops epoch state for each id.
     endContextEpoch(previousConversationId, nextConversationId);
     transferOverlayHold(previousConversationId, nextConversationId);
-    transferSkillCatalogAdmission(previousConversationId, nextConversationId);
     byConversationId.delete(previousConversationId);
     materializedByConversationId.delete(previousConversationId);
     byConversationId.delete(nextConversationId);
@@ -114,7 +110,6 @@ export function resetFrozenRequestContextsForTests() {
     materializedByConversationId.clear();
     buildsByConversationId.clear();
     resetOverlayHoldsForTests();
-    resetSkillCatalogAdmissionsForTests();
     resetContextEpochsForTests();
 }
 function sameBytes(a, b) {
@@ -124,6 +119,23 @@ function sameBytes(a, b) {
         if (a[i] !== b[i])
             return false;
     return true;
+}
+function advertisedMetaToolCount(context) {
+    const meta = context.mcp_meta_tool_options;
+    if (!meta || typeof meta !== "object")
+        return 0;
+    const descriptors = meta.mcp_descriptors;
+    if (!Array.isArray(descriptors))
+        return 0;
+    let count = 0;
+    for (const descriptor of descriptors) {
+        if (!descriptor || typeof descriptor !== "object")
+            continue;
+        const tools = descriptor.tools;
+        if (Array.isArray(tools))
+            count += tools.length;
+    }
+    return count;
 }
 function rememberMaterialized(conversationId, context) {
     const bytes = encodeMessage("RequestContext", context);
@@ -148,12 +160,23 @@ export async function getOrBuildRequestContext(conversationId, input, opts) {
     if (opts?.refresh && conversationId)
         clearOverlayHold(conversationId);
     if (!opts?.refresh && conversationId) {
-        const base = getFrozenRequestContext(conversationId);
+        let base = getFrozenRequestContext(conversationId);
         if (base) {
+            // The system-instructions rule is frozen with the base. A new epoch
+            // baseline (compaction rebase, binding reset) replaces it; a recovered
+            // epoch only fills a base persisted without one.
+            const instructed = withSystemInstructions(base, input.systemInstructions);
+            if (instructed !== base) {
+                setFrozenRequestContext(conversationId, instructed);
+                base = getFrozenRequestContext(conversationId);
+                trace(`request_context: system instructions frozen conversationId=${conversationId} ` +
+                    `len=${input.systemInstructions?.text.length ?? 0} ` +
+                    `authoritative=${input.systemInstructions?.authoritative ?? false}`);
+            }
             const dynamic = await buildDynamicRequestContext(scoped);
             const materialized = rememberMaterialized(conversationId, materializeRequestContext(base, dynamic));
             trace(`request_context: materialized conversationId=${conversationId} ` +
-                `tools=${Array.isArray(materialized.context.tools) ? materialized.context.tools.length : 0} ` +
+                `tools=${advertisedMetaToolCount(materialized.context)} ` +
                 `reused=${materialized.reused}`);
             return materialized;
         }
@@ -187,7 +210,7 @@ export async function getOrBuildRequestContext(conversationId, input, opts) {
         ? rememberMaterialized(conversationId, context)
         : { context: freezeSnapshot(structuredClone(context)), reused: false };
     trace(`request_context: built+frozen conversationId=${conversationId || "(none)"} ` +
-        `tools=${Array.isArray(materialized.context.tools) ? materialized.context.tools.length : 0} ` +
+        `tools=${advertisedMetaToolCount(materialized.context)} ` +
         `refresh=${!!opts?.refresh}`);
     return { context: materialized.context, reused: false };
 }

@@ -9,6 +9,7 @@
  * At a successful TurnEnded it is compacted to the graph reachable from the
  * latest checkpoint, matching Cursor CLI's conversation-export traversal.
  */
+import { errorMessage } from "../debug.js";
 import { collectReachableConversationBlobIds } from "./blob-reachability.js";
 function hex(b) {
     let s = "";
@@ -76,7 +77,7 @@ export function inspectConversationBlobGraph(conversationId, checkpoint) {
         return { count, bytes, complete: true };
     }
     catch (error) {
-        return retainedStats(error instanceof Error ? error.message : String(error));
+        return retainedStats(errorMessage(error));
     }
 }
 /** Copy all durable blobs so a completed turn can be persisted atomically. */
@@ -131,7 +132,7 @@ export function compactConversationBlobs(conversationId, checkpoint) {
         };
     }
     catch (error) {
-        return fallback(error instanceof Error ? error.message : String(error));
+        return fallback(errorMessage(error));
     }
 }
 /** Replace the in-memory blob bucket when restoring a persisted conversation. */

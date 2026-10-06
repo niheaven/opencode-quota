@@ -1,5 +1,7 @@
 /** Soft cap for the debug log file; exceeded size triggers truncate + new header. */
 export declare const DEBUG_LOG_MAX_BYTES: number;
+/** Message of an unknown thrown value, for log lines and error text. */
+export declare function errorMessage(error: unknown): string;
 /** Whether `CURSOR_PROVIDER_DEBUG` is enabled for this process. */
 export declare function isDebugEnabled(): boolean;
 /** Resolve the debug log path (env override or per-uid tmpdir default). */

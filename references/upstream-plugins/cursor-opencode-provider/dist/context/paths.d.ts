@@ -21,8 +21,12 @@ export declare function setHostCacheDirOverride(dir: string | undefined): void;
 export declare function getHostCacheDirOverride(): string | undefined;
 /** Resolve the native OpenCode cache root when no host bridge is installed. */
 export declare function resolveHostCacheDir(env?: HostPathEnv): string;
-/** Native OpenCode global config dir. */
-export declare function opencodeGlobalConfigDir(): string;
+/**
+ * Native OpenCode global config dir: `$XDG_CONFIG_HOME/opencode`, otherwise
+ * `~/.config/opencode` — OpenCode's `Global.Path.config` (`xdg-basedir`
+ * `xdgConfig`, `packages/core/src/global.ts`), the same in 1.x and 2.0.
+ */
+export declare function opencodeGlobalConfigDir(env?: HostPathEnv): string;
 /**
  * Host global cache dir for Cursor project metadata + model/version caches.
  *
@@ -57,7 +61,7 @@ export declare function hostGlobalDataDir(env?: HostPathEnv): string;
  */
 export declare function hostPlansDir(_workspaceRoot?: string): string;
 /**
- * Cursor-compatible path slug (`/Users/a/b` → `Users-a-b`).
+ * Cursor-compatible path slug (`/workspace/a/b` → `workspace-a-b`).
  * Used for per-workspace metadata under the host cache.
  */
 export declare function slugifyWorkspacePath(workspaceRoot: string): string;
@@ -72,4 +76,3 @@ export declare function slugifyWorkspacePath(workspaceRoot: string): string;
 export declare function opencodeProjectDir(workspaceRoot: string): string;
 /** Ensure {@link opencodeProjectDir} exists (mode 0o700) and return it. */
 export declare function ensureOpencodeProjectDir(workspaceRoot: string): string;
-export declare function resolveHomeRelative(p: string): string;

@@ -4,11 +4,13 @@
  * Mirrors OpenCode research CONTEXT.md:
  * - One Baseline System Context per conversation_id (provider-cache prefix)
  * - Later Context Source changes → Mid-Conversation System Message on the
- *   user turn (Cursor checkpoint Runs cannot rewrite systemPrompt)
+ *   user turn; the baseline itself never changes within the epoch
  * - Epoch ends on conversation remint (compaction / post-compaction rebase)
  *
- * Cursor constraint: systemPrompt is only sent on seed Runs. Checkpointed
- * Runs admit updates exclusively via the live user message.
+ * The baseline reaches Cursor as the frozen system-instructions rule in
+ * RequestContext (`systemInstructionsRule`), on every Run. `seedSystemPrompt`
+ * marks the Runs that start a conversation; it is not sent as a `system`
+ * message, which Cursor does not follow.
  */
 import { createHash } from "node:crypto";
 import { trace } from "../debug.js";
@@ -80,8 +82,8 @@ function combineMessages(parts) {
  * - First seed: freeze baseline, return it as seedSystemPrompt; one-shots → mid.
  * - Checkpoint turn: never returns seedSystemPrompt; source diffs + one-shots → mid.
  * - Reseed same epoch: return frozen baseline bytes (not live host text).
- * - Recovered (restart past a checkpoint, original bytes unknown): never freeze
- *   live host text as a new baseline and never send a seed systemPrompt.
+ * - Recovered: restore the persisted rule and reassert live context once on the
+ *   user turn. A legacy checkpoint without a rule has no original bytes.
  */
 export function admitContextEpoch(input) {
     const conversationId = input.conversationId;
@@ -90,17 +92,27 @@ export function admitContextEpoch(input) {
     const existing = byConversationId.get(conversationId);
     if (!existing) {
         if (input.hasCheckpoint) {
-            // Restart / soft-evict recovery: Cursor already holds the baseline in the
-            // checkpoint. Record the live snapshot without reseeding systemPrompt.
+            // Restart / soft-evict recovery: keep the original rule and reassert the
+            // live instructions chronologically without changing the cache prefix.
+            const baselineSystemPrompt = input.recoveredBaseline ?? "";
             const epoch = {
                 conversationId,
-                baselineSystemPrompt: "",
-                baselineHash: "",
+                baselineSystemPrompt,
+                baselineHash: baselineSystemPrompt ? sha(baselineSystemPrompt) : "",
                 recovered: true,
                 snapshot: nextSnap,
             };
             touch(epoch);
-            const midConversationMessage = combineMessages(oneShots);
+            // The persisted rule is the original prefix, not necessarily the current
+            // host instructions. Reconcile live context once before recording its
+            // snapshot; otherwise a changed prompt is silently treated as admitted.
+            // Even equality with the original baseline needs an update: the last
+            // checkpoint may contain an intervening mode/instruction change.
+            const liveBaseline = buildBaseline(input);
+            const recoveryUpdate = baselineSystemPrompt && liveBaseline
+                ? wrapReminder("Current host system instructions after session recovery:\n\n" + liveBaseline)
+                : "";
+            const midConversationMessage = combineMessages([recoveryUpdate, ...oneShots]);
             trace(`context epoch: recovered conversationId=${conversationId} ` +
                 `oneShots=${oneShots.length}`);
             return { action: "recovered", midConversationMessage, epoch };
