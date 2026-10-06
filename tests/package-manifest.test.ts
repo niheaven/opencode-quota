@@ -663,7 +663,7 @@ describe("package manifest compatibility", () => {
         );
         writeFileSync(
           join(dir, "npx"),
-          `#!/bin/sh\necho "npx $*" >> "${log}"\ncase "$2" in semver@*) [ "$NEXT_IS_NEWER" = 1 ];; esac\n`,
+          `#!/bin/sh\necho "npx $*" >> "${log}"\ncase "$*" in *--version) ;; *semver@*) [ "$NEXT_IS_NEWER" = 1 ];; esac\n`,
         );
         chmodSync(join(dir, "npm"), 0o755);
         chmodSync(join(dir, "npx"), 0o755);
@@ -685,11 +685,13 @@ describe("package manifest compatibility", () => {
 
     expect(commandsFor("5.0.1", false)).toEqual([
       "npm view @slkiser/opencode-quota dist-tags.next",
+      "npx --yes semver@7 --version",
       "npx --yes semver@7 --include-prerelease --range >5.0.2 5.0.1",
       "npx --yes npm@^11.21.0 dist-tag add @slkiser/opencode-quota@5.0.2 next",
     ]);
     expect(commandsFor("5.1.0-beta.1", true)).toEqual([
       "npm view @slkiser/opencode-quota dist-tags.next",
+      "npx --yes semver@7 --version",
       "npx --yes semver@7 --include-prerelease --range >5.0.2 5.1.0-beta.1",
     ]);
   });
