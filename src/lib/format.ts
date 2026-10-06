@@ -249,20 +249,20 @@ export function formatQuotaRows(params: {
     resetIso: string | undefined,
     value: string,
     atomicValue = false,
+    statusValue = false,
   ) => {
-    const timeStr =
-      atomicValue && !resetIso
-        ? ""
-        : formatResetCountdown(
-            resetIso,
-            isResetTimeDecimals(params.resetTimeDecimals)
-              ? {
-                  missing: "-",
-                  compactRounded: true,
-                  decimals: params.resetTimeDecimals,
-                }
-              : { missing: "-", spaced: params.resetTimeSpaced },
-          );
+    const timeStr = !resetIso
+      ? ""
+      : formatResetCountdown(
+          resetIso,
+          isResetTimeDecimals(params.resetTimeDecimals)
+            ? {
+                missing: "-",
+                compactRounded: true,
+                decimals: params.resetTimeDecimals,
+              }
+            : { missing: "-", spaced: params.resetTimeSpaced },
+        );
 
     if (atomicValue) {
       const suffix = [value, timeStr].filter(Boolean).join(separator);
@@ -299,6 +299,16 @@ export function formatQuotaRows(params: {
     }
 
     const nameAndValue = [name, value].filter(Boolean).join(separator);
+    if (statusValue && !timeStr) {
+      // Untimed statuses have no reset column; keep the full name and status visible.
+      if (nameAndValue.length > maxWidth) {
+        lines.push(...wrapDisplayText(name, maxWidth));
+        lines.push(...wrapDisplayText(value, maxWidth));
+      } else {
+        lines.push(nameAndValue);
+      }
+      return;
+    }
     if (
       timeStr &&
       nameAndValue.length <= maxWidth &&
@@ -306,6 +316,22 @@ export function formatQuotaRows(params: {
     ) {
       lines.push(nameAndValue);
       lines.push(padLeft(timeStr, maxWidth));
+      return;
+    }
+
+    const valueAndTimeWidth =
+      separator.length +
+      Math.max(value.length, 6) +
+      separator.length +
+      Math.max(timeStr.length, timeCol);
+    if (
+      nameAndValue.length + separator.length + timeStr.length > maxWidth &&
+      valueAndTimeWidth >= maxWidth
+    ) {
+      // The value is too wide to share a line with its name, so stack them instead of cutting both.
+      lines.push(...wrapDisplayText(name, maxWidth));
+      lines.push(...wrapDisplayText(value, maxWidth));
+      if (timeStr) lines.push(padLeft(timeStr, maxWidth));
       return;
     }
 
@@ -321,22 +347,6 @@ export function formatQuotaRows(params: {
         padLeft(value, valueCol),
       ].join(separator);
       lines.push(line.slice(0, maxWidth));
-      return;
-    }
-
-    const valueAndTimeWidth =
-      separator.length +
-      Math.max(value.length, 6) +
-      separator.length +
-      Math.max(timeStr.length, timeCol);
-    if (
-      nameAndValue.length + separator.length + timeStr.length > maxWidth &&
-      valueAndTimeWidth >= maxWidth
-    ) {
-      // The value is too wide to share a line with its name, so stack them instead of cutting both.
-      lines.push(name.slice(0, maxWidth));
-      lines.push(...wrapDisplayText(value, maxWidth).map((line) => padLeft(line, maxWidth)));
-      if (timeStr) lines.push(padLeft(timeStr, maxWidth));
       return;
     }
 
@@ -398,6 +408,7 @@ export function formatQuotaRows(params: {
         entry.resetTimeIso,
         interpretation.display.text,
         interpretation.display.entryKind !== "value",
+        entry.accounting?.resultType === "status",
       );
     } else {
       addPercentEntry(
