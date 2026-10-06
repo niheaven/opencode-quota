@@ -182,7 +182,7 @@ jobs:
           VERSION="${RELEASE_TAG#v}"
           NEXT="$(npm view "$PACKAGE" dist-tags.next)"
           # Fetch the semver tool first: a failed download must stop here, not read as "not newer".
-          npx --yes semver@7 --version >/dev/null
+          npx --yes semver@7 0.0.0 >/dev/null
           if [ -n "$NEXT" ] && npx --yes semver@7 --include-prerelease --range ">$VERSION" "$NEXT" >/dev/null; then
             echo "next is $NEXT, newer than $VERSION; leaving it."
             exit 0
