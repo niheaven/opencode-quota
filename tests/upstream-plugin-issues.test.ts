@@ -187,6 +187,25 @@ describe("upstream-plugin-issues", () => {
     expect(plan.close).toEqual([]);
   });
 
+  it("stays quiet for a closed issue whose body was saved with CRLF line endings", () => {
+    const closedBody = buildUpstreamPluginIssueBody({
+      issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+      latest,
+      spec,
+      tracked,
+    }).replace(/\n/gu, "\r\n");
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [{ body: closedBody, number: 7, user: BOT }],
+      existingIssues: [],
+      latest,
+      spec,
+      tracked,
+    });
+
+    expect(plan.create).toBeNull();
+  });
+
   it("opens a new issue when npm publishes a newer version after a closed one", () => {
     const olderBody = buildUpstreamPluginIssueBody({
       issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,

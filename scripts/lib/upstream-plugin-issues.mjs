@@ -128,7 +128,7 @@ export function planUpstreamPluginIssueAction({
     const releaseLines = Object.values(buildReleaseLines(spec, latest));
     const closedForThisRelease = closedIssues.some((issue) => {
       const issueBody = issue.body ?? "";
-      const issueLines = issueBody.split("\n");
+      const issueLines = issueBody.split(/\r?\n/u);
       return (
         issue.user?.login === UPSTREAM_CHECK_ISSUE_AUTHOR &&
         parseIssueMarkers(issueBody).plugin === spec.pluginId &&
