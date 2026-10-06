@@ -50,12 +50,12 @@ async function githubRequest(path, token, init = {}) {
   return data;
 }
 
-async function listOpenIssues(repository, token) {
+async function listIssues(repository, token, state) {
   const issues = [];
 
   for (let page = 1; ; page += 1) {
     const data = await githubRequest(
-      `/repos/${repository}/issues?state=open&per_page=100&page=${page}`,
+      `/repos/${repository}/issues?state=${state}&per_page=100&page=${page}`,
       token,
     );
 
@@ -155,9 +155,12 @@ async function main() {
     throw new Error("GITHUB_TOKEN is required when --write-issues is set.");
   }
 
-  const existingIssues = await listOpenIssues(repository, token);
+  const existingIssues = await listIssues(repository, token, "open");
+  // Closed issues tell which npm versions the maintainer already checked and dismissed.
+  const closedIssues = await listIssues(repository, token, "closed");
   const plannedActions = UPSTREAM_PLUGIN_SPECS.map((spec) =>
     planUpstreamPluginIssueAction({
+      closedIssues,
       existingIssues,
       latest: latestByPluginId.get(spec.pluginId),
       spec,

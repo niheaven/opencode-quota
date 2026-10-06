@@ -74,7 +74,13 @@ export function buildUpstreamPluginIssueBody({ spec, tracked, latest, issueState
   ].join("\n");
 }
 
-export function planUpstreamPluginIssueAction({ spec, tracked, latest, existingIssues }) {
+export function planUpstreamPluginIssueAction({
+  spec,
+  tracked,
+  latest,
+  existingIssues,
+  closedIssues = [],
+}) {
   const title = getUpstreamPluginIssueTitle(spec.pluginId);
   const issueState = getDesiredIssueState(tracked, latest);
   const body = buildUpstreamPluginIssueBody({ issueState, latest, spec, tracked });
@@ -88,6 +94,23 @@ export function planUpstreamPluginIssueAction({ spec, tracked, latest, existingI
 
   if (matchingIssues.length === 0) {
     if (issueState === UPSTREAM_PLUGIN_ISSUE_STATE.SYNCED_PENDING_REVIEW) {
+      return {
+        title,
+        body,
+        close: [],
+        comments: [],
+        create: null,
+        update: null,
+      };
+    }
+
+    // The maintainer closed this plugin's issue for this same npm version (checked, no
+    // effect on us, nothing synced). Stay quiet until npm publishes a newer version.
+    const closedForThisVersion = closedIssues.some((issue) => {
+      const markers = parseIssueMarkers(issue.body ?? "");
+      return markers.plugin === spec.pluginId && markers["latest-version"] === latest.version;
+    });
+    if (closedForThisVersion) {
       return {
         title,
         body,

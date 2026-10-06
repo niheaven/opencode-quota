@@ -163,6 +163,64 @@ describe("upstream-plugin-issues", () => {
     expect(plan.close).toEqual([]);
   });
 
+  it("stays quiet when an issue for the same npm version was closed", () => {
+    const closedBody = buildUpstreamPluginIssueBody({
+      issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+      latest,
+      spec,
+      tracked,
+    });
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [{ body: closedBody, number: 7 }],
+      existingIssues: [],
+      latest,
+      spec,
+      tracked,
+    });
+
+    expect(plan.create).toBeNull();
+    expect(plan.update).toBeNull();
+    expect(plan.comments).toEqual([]);
+    expect(plan.close).toEqual([]);
+  });
+
+  it("opens a new issue when npm publishes a newer version after a closed one", () => {
+    const olderBody = buildUpstreamPluginIssueBody({
+      issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+      latest,
+      spec,
+      tracked,
+    });
+    const newer = {
+      ...latest,
+      npmUrl: "https://www.npmjs.com/package/opencode-gemini-auth/v/1.4.0",
+      publishedAt: "2026-04-01T00:00:00.000Z",
+      version: "1.4.0",
+    };
+    const otherPluginBody = olderBody.replace(
+      "opencode-quota:plugin=opencode-gemini-auth",
+      "opencode-quota:plugin=opencode-agy-auth",
+    );
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [
+        { body: olderBody, number: 7 },
+        {
+          body: otherPluginBody.replace("latest-version=1.3.0", "latest-version=1.4.0"),
+          number: 8,
+        },
+      ],
+      existingIssues: [],
+      latest: newer,
+      spec,
+      tracked,
+    });
+
+    expect(plan.create).toMatchObject({ title: "[check] opencode-gemini-auth had update" });
+    expect(plan.create?.body).toContain("<!-- opencode-quota:latest-version=1.4.0 -->");
+  });
+
   it("updates the canonical issue, comments on newer releases, and closes duplicates", () => {
     const previousLatest = {
       ...tracked,
