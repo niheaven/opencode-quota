@@ -62,9 +62,3 @@ body:
       label: Paste what `/quota_status` shows (optional)
       description: It never shows your keys or passwords. It does show folder paths, which can include your computer's username.
       render: shell
-
-  - type: textarea
-    id: no_latest_reason
-    attributes:
-      label: Didn't try the newest OpenCode or plugin? Tell us why
-      description: Leave blank if you did.

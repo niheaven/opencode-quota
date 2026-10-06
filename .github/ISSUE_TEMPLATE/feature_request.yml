@@ -6,7 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Ideas that change what you see on screen go to [#293](https://github.com/slkiser/opencode-quota/issues/293). Something broken? Use **Bug report**. New provider? Use **Provider request**.
+        Ideas that change what you see on screen go to [#293](https://github.com/slkiser/opencode-quota/issues/293).
+        Something broken? Use **Bug report**.
+        New provider? Use **Provider request**.
 
   - type: dropdown
     id: display_change
