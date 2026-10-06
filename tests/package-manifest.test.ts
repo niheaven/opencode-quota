@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,7 @@ interface WorkflowStep {
 
 interface WorkflowJob {
   "runs-on"?: string;
+  if?: string;
   needs?: string | string[];
   permissions?: Record<string, string>;
   steps?: WorkflowStep[];
@@ -483,6 +484,7 @@ describe("package manifest compatibility", () => {
     });
     expect(Object.keys(publishWorkflow.jobs).sort()).toEqual([
       "backfill-version",
+      "point-next-at-stable",
       "publish",
       "release-package",
       "runtime-smoke",
@@ -638,5 +640,57 @@ describe("package manifest compatibility", () => {
     expect(distTagFor("v5.0.0-beta.1", "false")).toBe("dist-tag=next\n");
     expect(distTagFor("v5.0.0", "true")).toBe("dist-tag=next\n");
     expect(distTagFor("v5.0.0", "false")).toBe("dist-tag=latest\n");
+  });
+
+  it("points next at each stable release unless next is already newer", () => {
+    const job = publishWorkflow.jobs["point-next-at-stable"];
+    expect(job.needs).toBe("publish");
+    expect(job.if).toBe(
+      "${{ !github.event.release.prerelease && !contains(github.event.release.tag_name, '-') }}",
+    );
+    expect(job.permissions).toEqual({ contents: "read", "id-token": "write" });
+    const step = namedStep(job, "Point next at the new stable version");
+
+    // Stand-in npm and npx log their arguments; npx answers the semver check from NEXT_IS_NEWER.
+    const commandsFor = (currentNext: string, nextIsNewer: boolean): string[] => {
+      const dir = mkdtempSync(join(tmpdir(), "opencode-quota-next-tag-"));
+      try {
+        const log = join(dir, "commands");
+        writeFileSync(log, "");
+        writeFileSync(
+          join(dir, "npm"),
+          `#!/bin/sh\necho "npm $*" >> "${log}"\necho "${currentNext}"\n`,
+        );
+        writeFileSync(
+          join(dir, "npx"),
+          `#!/bin/sh\necho "npx $*" >> "${log}"\ncase "$2" in semver@*) [ "$NEXT_IS_NEWER" = 1 ];; esac\n`,
+        );
+        chmodSync(join(dir, "npm"), 0o755);
+        chmodSync(join(dir, "npx"), 0o755);
+        execFileSync("bash", ["-e", "-c", step.run ?? "exit 1"], {
+          env: {
+            ...process.env,
+            ...step.env,
+            RELEASE_TAG: "v5.0.2",
+            NEXT_IS_NEWER: nextIsNewer ? "1" : "0",
+            PATH: `${dir}:${process.env.PATH}`,
+          },
+          stdio: "ignore",
+        });
+        return readFileSync(log, "utf8").trim().split("\n");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    expect(commandsFor("5.0.1", false)).toEqual([
+      "npm view @slkiser/opencode-quota dist-tags.next",
+      "npx --yes semver@7 --include-prerelease --range >5.0.2 5.0.1",
+      "npx --yes npm@^11.21.0 dist-tag add @slkiser/opencode-quota@5.0.2 next",
+    ]);
+    expect(commandsFor("5.1.0-beta.1", true)).toEqual([
+      "npm view @slkiser/opencode-quota dist-tags.next",
+      "npx --yes semver@7 --include-prerelease --range >5.0.2 5.1.0-beta.1",
+    ]);
   });
 });
