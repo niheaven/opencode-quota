@@ -18,6 +18,8 @@ const tracked = {
   version: "1.2.0",
 };
 
+const BOT = { login: "github-actions[bot]" };
+
 const latest = {
   ...tracked,
   npmUrl: "https://www.npmjs.com/package/opencode-gemini-auth/v/1.3.0",
@@ -172,7 +174,7 @@ describe("upstream-plugin-issues", () => {
     });
 
     const plan = planUpstreamPluginIssueAction({
-      closedIssues: [{ body: closedBody, number: 7 }],
+      closedIssues: [{ body: closedBody, number: 7, user: BOT }],
       existingIssues: [],
       latest,
       spec,
@@ -205,10 +207,11 @@ describe("upstream-plugin-issues", () => {
 
     const plan = planUpstreamPluginIssueAction({
       closedIssues: [
-        { body: olderBody, number: 7 },
+        { body: olderBody, number: 7, user: BOT },
         {
           body: otherPluginBody.replace("latest-version=1.3.0", "latest-version=1.4.0"),
           number: 8,
+          user: BOT,
         },
       ],
       existingIssues: [],
@@ -219,6 +222,70 @@ describe("upstream-plugin-issues", () => {
 
     expect(plan.create).toMatchObject({ title: "[check] opencode-gemini-auth had update" });
     expect(plan.create?.body).toContain("<!-- opencode-quota:latest-version=1.4.0 -->");
+  });
+
+  it("opens a new issue when a closed release is republished with other details", () => {
+    const closedBody = buildUpstreamPluginIssueBody({
+      issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+      latest,
+      spec,
+      tracked,
+    });
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [{ body: closedBody, number: 7, user: BOT }],
+      existingIssues: [],
+      latest: { ...latest, publishedAt: "2026-03-21T00:00:00.000Z" },
+      spec,
+      tracked,
+    });
+
+    expect(plan.create).toMatchObject({ title: "[check] opencode-gemini-auth had update" });
+  });
+
+  it("ignores closed issues that this workflow did not open", () => {
+    const copiedBody = buildUpstreamPluginIssueBody({
+      issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+      latest,
+      spec,
+      tracked,
+    });
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [{ body: copiedBody, number: 7, user: { login: "someone" } }],
+      existingIssues: [],
+      latest,
+      spec,
+      tracked,
+    });
+
+    expect(plan.create).toMatchObject({ title: "[check] opencode-gemini-auth had update" });
+  });
+
+  it("treats an issue closed during the run as closed, never updating it", () => {
+    const olderLatest = { ...latest, version: "1.2.5", publishedAt: "2026-03-10T00:00:00.000Z" };
+    const closedDuringRun = {
+      body: buildUpstreamPluginIssueBody({
+        issueState: UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE,
+        latest: olderLatest,
+        spec,
+        tracked,
+      }),
+      number: 7,
+      user: BOT,
+    };
+
+    const plan = planUpstreamPluginIssueAction({
+      closedIssues: [closedDuringRun],
+      existingIssues: [closedDuringRun],
+      latest,
+      spec,
+      tracked,
+    });
+
+    expect(plan.update).toBeNull();
+    expect(plan.comments).toEqual([]);
+    expect(plan.create).toMatchObject({ title: "[check] opencode-gemini-auth had update" });
   });
 
   it("updates the canonical issue, comments on newer releases, and closes duplicates", () => {

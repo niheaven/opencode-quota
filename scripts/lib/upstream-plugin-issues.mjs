@@ -44,26 +44,42 @@ function getDesiredIssueState(tracked, latest) {
     : UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE;
 }
 
+// Only issues this workflow opened can mark an npm release as checked.
+const UPSTREAM_CHECK_ISSUE_AUTHOR = "github-actions[bot]";
+
+/** Body lines naming the npm release an issue is about (the fields compared for "in sync"). */
+function buildReleaseLines(spec, latest) {
+  return {
+    packageName: `- Package: \`${latest.packageName}\``,
+    repo: `- Repository: \`${latest.repo}\``,
+    version: `- Latest npm version: \`${latest.version}\``,
+    publishedAt: `- Published at: \`${latest.publishedAt}\``,
+    referenceDir: `- Reference path: \`${spec.referenceDir}\``,
+    npmUrl: `- npm release: ${latest.npmUrl}`,
+  };
+}
+
 export function buildUpstreamPluginIssueBody({ spec, tracked, latest, issueState }) {
   const reviewCommand = "pnpm run upstream:prepare-review";
   const intro =
     issueState === UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE
       ? "An upstream companion plugin has a newer npm release than the copy tracked in this repository."
       : "The tracked copy now matches the latest npm release, but review, compatibility checking, and release work are still pending.";
+  const release = buildReleaseLines(spec, latest);
 
   return [
     intro,
     "",
     `- Plugin: \`${spec.pluginId}\``,
-    `- Package: \`${latest.packageName}\``,
-    `- Repository: \`${latest.repo}\``,
+    release.packageName,
+    release.repo,
     `- Tracked version: \`${tracked.version}\``,
-    `- Latest npm version: \`${latest.version}\``,
+    release.version,
     `- Issue state: \`${issueState}\``,
-    `- Published at: \`${latest.publishedAt}\``,
-    `- Reference path: \`${spec.referenceDir}\``,
+    release.publishedAt,
+    release.referenceDir,
     `- Review-prep command: \`${reviewCommand}\``,
-    `- npm release: ${latest.npmUrl}`,
+    release.npmUrl,
     `- Upstream repo: ${latest.repoUrl}`,
     "",
     buildMarker("plugin", spec.pluginId),
@@ -84,7 +100,10 @@ export function planUpstreamPluginIssueAction({
   const title = getUpstreamPluginIssueTitle(spec.pluginId);
   const issueState = getDesiredIssueState(tracked, latest);
   const body = buildUpstreamPluginIssueBody({ issueState, latest, spec, tracked });
-  const matchingIssues = [...existingIssues]
+  // An issue closed while this run listed issues shows up in both lists; it counts as closed.
+  const closedNumbers = new Set(closedIssues.map((issue) => issue.number));
+  const matchingIssues = existingIssues
+    .filter((issue) => !closedNumbers.has(issue.number))
     .map((issue) => ({
       issue,
       markers: parseIssueMarkers(issue.body ?? ""),
@@ -104,13 +123,19 @@ export function planUpstreamPluginIssueAction({
       };
     }
 
-    // The maintainer closed this plugin's issue for this same npm version (checked, no
-    // effect on us, nothing synced). Stay quiet until npm publishes a newer version.
-    const closedForThisVersion = closedIssues.some((issue) => {
-      const markers = parseIssueMarkers(issue.body ?? "");
-      return markers.plugin === spec.pluginId && markers["latest-version"] === latest.version;
+    // The maintainer closed this workflow's issue for this same npm release (checked, no
+    // effect on us, nothing synced). Stay quiet until npm publishes something different.
+    const releaseLines = Object.values(buildReleaseLines(spec, latest));
+    const closedForThisRelease = closedIssues.some((issue) => {
+      const issueBody = issue.body ?? "";
+      const issueLines = issueBody.split("\n");
+      return (
+        issue.user?.login === UPSTREAM_CHECK_ISSUE_AUTHOR &&
+        parseIssueMarkers(issueBody).plugin === spec.pluginId &&
+        releaseLines.every((line) => issueLines.includes(line))
+      );
     });
-    if (closedForThisVersion) {
+    if (closedForThisRelease) {
       return {
         title,
         body,
