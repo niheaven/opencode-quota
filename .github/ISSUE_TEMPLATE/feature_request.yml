@@ -6,19 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Right now we only fix bugs and make small changes. Got an idea that changes what you see on screen (the sidebar, pop-ups, or the line under the message box)? Add it to [#293](https://github.com/slkiser/opencode-quota/issues/293) instead.
-        Want a new provider? Use the **Provider request** form.
-        Something broken or hard to read? Use the **Bug report** form.
-
-  - type: checkboxes
-    id: checks
-    attributes:
-      label: Before you post
-      options:
-        - label: I searched the existing issues and nobody has asked for this yet.
-          required: true
-        - label: I checked how it works now on the newest OpenCode and the newest plugin version.
-          required: true
+        Ideas that change what you see on screen go to [#293](https://github.com/slkiser/opencode-quota/issues/293). Something broken? Use **Bug report**. New provider? Use **Provider request**.
 
   - type: dropdown
     id: display_change
@@ -35,7 +23,7 @@ body:
   - type: input
     id: opencode_version
     attributes:
-      label: OpenCode version
+      label: Your OpenCode version
       description: Example `2.0.20`
       placeholder: 2.0.20
     validations:
@@ -44,7 +32,7 @@ body:
   - type: input
     id: plugin_version
     attributes:
-      label: Plugin version
+      label: Your plugin version
       description: Run `/quota_status` in OpenCode. The version is in the first line. If it has `beta` in it, update first, because it may already work.
       placeholder: 5.0.1
     validations:

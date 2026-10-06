@@ -202,7 +202,7 @@ describe("GitHub workflows", () => {
     ]);
   });
 
-  it("asks which OpenCode and whether the display changes right after the checkboxes", async () => {
+  it("asks which OpenCode and whether the display changes right after the intro", async () => {
     const bug = parse(await readFile(".github/ISSUE_TEMPLATE/bug_report.yml", "utf8")) as {
       body: Array<{ id?: string; attributes: { label?: string; options?: unknown[] } }>;
     };
@@ -210,8 +210,7 @@ describe("GitHub workflows", () => {
       await readFile(".github/ISSUE_TEMPLATE/feature_request.yml", "utf8"),
     ) as typeof bug;
 
-    expect(bug.body[1]?.id).toBe("checks");
-    expect(bug.body[2]).toMatchObject({
+    expect(bug.body[1]).toMatchObject({
       type: "dropdown",
       id: "opencode_line",
       attributes: {
@@ -220,8 +219,7 @@ describe("GitHub workflows", () => {
       },
       validations: { required: true },
     });
-    expect(feature.body[1]?.id).toBe("checks");
-    expect(feature.body[2]).toMatchObject({
+    expect(feature.body[1]).toMatchObject({
       type: "dropdown",
       id: "display_change",
       attributes: {
