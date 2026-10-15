@@ -1115,7 +1115,7 @@ const DEBUG_DETAILS: Readonly<Partial<Record<CanonicalQuotaProviderId, DebugRule
     cli_available: bool,
     // The provider writes the platform this report runs on.
     platform: oneOf(process.platform),
-    windows: listOf(["5h", "weekly"]),
+    windows: listOf(["monthly"]),
     failure_kind: oneOf(...Object.keys(ALIBABA_TOKEN_PLAN_ERRORS)),
   },
   synthetic: { api_key_diagnostics: KEY_SUMMARY },

@@ -73,25 +73,42 @@ describe("alibaba-token-plan provider", () => {
 
   it.each([
     [
-      "both windows",
-      {
-        ok: true,
-        fiveHour: { percentRemaining: 40 },
-        weekly: { percentRemaining: 60, resetTimeIso: RESET },
-      },
-      [
-        ["alibaba-token-plan.five_hour", null, "5h", "five_hour", 40, null],
-        ["alibaba-token-plan.weekly", null, "Weekly", "week", 60, RESET],
-      ],
+      "the monthly window",
+      { ok: true, monthly: { percentRemaining: 40, resetTimeIso: RESET } },
+      [["alibaba-token-plan.monthly", null, "Monthly", "month", 40, RESET]],
       undefined,
-      [{ key: "cli_available", value: "true" }, PLATFORM, { key: "windows", value: "5h,weekly" }],
+      [{ key: "cli_available", value: "true" }, PLATFORM, { key: "windows", value: "monthly" }],
     ],
     [
-      "only the weekly window, without making up the other",
-      { ok: true, weekly: { percentRemaining: 60, resetTimeIso: RESET } },
-      [["alibaba-token-plan.weekly", null, "Weekly", "week", 60, RESET]],
+      "no reported window, without making one up",
+      { ok: true },
+      [],
       undefined,
-      [{ key: "cli_available", value: "true" }, PLATFORM, { key: "windows", value: "weekly" }],
+      [{ key: "cli_available", value: "true" }, PLATFORM, { key: "windows", value: "(none)" }],
+    ],
+    [
+      "a legacy 5-hour/weekly payload",
+      {
+        ok: false,
+        error: {
+          kind: "legacy_schema",
+          message:
+            "Alibaba Cloud CLI returned an invalid Personal Token Plan payload: it reports the removed 5-hour and weekly windows. Upgrade bailian-cli (`npm install -g bailian-cli`).",
+        },
+      },
+      [],
+      { code: "bad_response" },
+      [
+        { key: "cli_available", value: "true" },
+        PLATFORM,
+        { key: "failure_kind", value: "legacy_schema" },
+        {
+          key: "error",
+          value:
+            "Alibaba Personal Token Plan: Alibaba Cloud CLI returned an invalid Personal Token Plan payload: it reports the removed 5-hour and weekly windows. Upgrade bailian-cli (`npm install -g bailian-cli`).",
+        },
+        { key: "error_kind", value: "bad_response" },
+      ],
     ],
     [
       "a missing CLI",

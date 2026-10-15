@@ -76,6 +76,7 @@ type AlibabaTokenPlanErrorKind =
   | "not_authenticated"
   | "invalid_json"
   | "invalid_schema"
+  | "legacy_schema"
   | "no_data";
 
 type AlibabaTokenPlanError = {
@@ -88,8 +89,8 @@ type AlibabaTokenPlanFailure = { ok: false; error: AlibabaTokenPlanError };
 export type AlibabaTokenPlanClosedResult =
   | {
       ok: true;
-      fiveHour?: AlibabaTokenPlanWindow;
-      weekly?: AlibabaTokenPlanWindow;
+      /** The monthly window; absent when the CLI reported none. */
+      monthly?: AlibabaTokenPlanWindow;
     }
   | AlibabaTokenPlanFailure;
 
@@ -142,6 +143,8 @@ export const ERROR_MESSAGES: Record<AlibabaTokenPlanErrorKind, string> = {
     "Alibaba Cloud console session is missing or expired. Run `bl auth login --console`.",
   invalid_json: "Alibaba Cloud CLI did not return valid JSON.",
   invalid_schema: "Alibaba Cloud CLI returned an invalid Personal Token Plan payload.",
+  legacy_schema:
+    "Alibaba Cloud CLI returned an invalid Personal Token Plan payload: it reports the removed 5-hour and weekly windows. Upgrade bailian-cli (`npm install -g bailian-cli`).",
   no_data: "Alibaba Personal Token Plan usage returned no quota windows.",
 };
 
@@ -254,24 +257,24 @@ export async function resolveAlibabaTokenPlanExecutable(params: {
   return fail(sawShellLauncher ? "shell_launcher_rejected" : "executable_not_found");
 }
 
-/** One window: a used fraction 0..1 and an optional epoch-ms reset. A reset alone is invalid. */
+/**
+ * The monthly window: the used fraction 0..1 and an optional epoch-ms reset. A reset alone is
+ * invalid; neither present means the plan may be unlimited.
+ */
 function parseWindow(
   payload: Record<string, unknown>,
-  prefix: "per5Hour" | "per1Week",
 ): AlibabaTokenPlanWindow | undefined | "invalid" {
-  const percentageKey = `${prefix}Percentage`;
-  const resetKey = `${prefix}ResetTime`;
-  const resetPresent = Object.hasOwn(payload, resetKey);
-  if (!Object.hasOwn(payload, percentageKey)) return resetPresent ? "invalid" : undefined;
+  const resetPresent = Object.hasOwn(payload, "per1MonthResetTime");
+  if (!Object.hasOwn(payload, "per1MonthPercentage")) return resetPresent ? "invalid" : undefined;
 
-  const used = payload[percentageKey];
+  const used = payload.per1MonthPercentage;
   if (typeof used !== "number" || !Number.isFinite(used) || used < 0 || used > 1) {
     return "invalid";
   }
   const percentRemaining = 100 - used * 100;
   if (!resetPresent) return { percentRemaining };
 
-  const reset = payload[resetKey];
+  const reset = payload.per1MonthResetTime;
   if (
     typeof reset !== "number" ||
     !Number.isFinite(reset) ||
@@ -283,6 +286,14 @@ function parseWindow(
   return { percentRemaining, resetTimeIso: new Date(reset).toISOString() };
 }
 
+/** The window fields the CLI removed in a minor release; their presence means an old `bl`. */
+const REMOVED_WINDOW_KEYS = [
+  "per5HourPercentage",
+  "per5HourResetTime",
+  "per1WeekPercentage",
+  "per1WeekResetTime",
+] as const;
+
 export function parseAlibabaTokenPlanUsageJson(text: string): AlibabaTokenPlanClosedResult {
   let payload: unknown;
   try {
@@ -293,16 +304,14 @@ export function parseAlibabaTokenPlanUsageJson(text: string): AlibabaTokenPlanCl
   const record = asRecord(payload);
   if (!record) return fail("invalid_schema");
 
-  const fiveHour = parseWindow(record, "per5Hour");
-  const weekly = parseWindow(record, "per1Week");
-  if (fiveHour === "invalid" || weekly === "invalid") return fail("invalid_schema");
-  if (!fiveHour && !weekly) return fail("no_data");
+  if (REMOVED_WINDOW_KEYS.some((key) => Object.hasOwn(record, key))) {
+    return fail("legacy_schema");
+  }
 
-  return {
-    ok: true,
-    ...(fiveHour ? { fiveHour } : {}),
-    ...(weekly ? { weekly } : {}),
-  };
+  const monthly = parseWindow(record);
+  if (monthly === "invalid") return fail("invalid_schema");
+  // No window is a valid reply: the CLI itself says the limit may be unlimited.
+  return { ok: true, ...(monthly ? { monthly } : {}) };
 }
 
 function errorCode(error: unknown): string | undefined {

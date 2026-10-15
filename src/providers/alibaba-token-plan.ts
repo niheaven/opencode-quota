@@ -8,25 +8,21 @@ import type { QuotaProvider, QuotaProviderContext } from "../lib/entries.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
 import { modelProviderMatchesRuntimeId } from "../lib/provider-model-matching.js";
 import {
-  FIVE_HOUR,
   failedAccount,
+  MONTHLY,
   type ProviderFetchResult,
   type ProviderRow,
   quotaRow,
-  WEEKLY,
 } from "./contract.js";
 import { statusDetailsFromRecord } from "./result-helpers.js";
 
 const GROUP = "Alibaba Personal Token Plan";
 
-/** A window the local Alibaba CLI reported. */
-function windowRow(
-  slot: typeof FIVE_HOUR | typeof WEEKLY,
-  window: AlibabaTokenPlanWindow,
-): ProviderRow {
+/** The monthly window the local Alibaba CLI reported. */
+function windowRow(window: AlibabaTokenPlanWindow): ProviderRow {
   return {
     ...quotaRow({
-      ...slot,
+      ...MONTHLY,
       percentRemaining: window.percentRemaining,
       resetsAt: window.resetTimeIso,
     }),
@@ -36,11 +32,10 @@ function windowRow(
 
 function statusDetailsFromResult(result: AlibabaTokenPlanClosedResult) {
   if (result.ok) {
-    const windows = [result.fiveHour ? "5h" : "", result.weekly ? "weekly" : ""].filter(Boolean);
     return statusDetailsFromRecord({
       cli_available: "true",
       platform: process.platform,
-      windows: windows.join(",") || "(none)",
+      windows: result.monthly ? MONTHLY.key : "(none)",
     });
   }
   return statusDetailsFromRecord({
@@ -81,10 +76,7 @@ export const alibabaTokenPlanProvider: QuotaProvider = {
     });
     const debug = statusDetailsFromResult(result);
     if (result.ok) {
-      const rows = [
-        ...(result.fiveHour ? [windowRow(FIVE_HOUR, result.fiveHour)] : []),
-        ...(result.weekly ? [windowRow(WEEKLY, result.weekly)] : []),
-      ];
+      const rows = result.monthly ? [windowRow(result.monthly)] : [];
       return { attempted: true, accounts: [{ name: GROUP, rows, errors: [] }], debug };
     }
     if (result.error.kind === "unsupported_platform") {

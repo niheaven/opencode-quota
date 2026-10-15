@@ -430,6 +430,7 @@ bl auth login --console
 ```
 
 - OpenCode Quota runs only `bl usage token-plan --output json`. It never installs `bl`, opens a login, reads console cookies, or runs a custom command.
+- It reports one **Monthly** row: the percent of the monthly plan still left, and its reset time when `bl` gives one. A reply without a percentage leaves the row out, as the plan may be unlimited; nothing is invented.
 - On macOS and Linux, `bl` must be in an absolute folder on the `PATH` (the OpenCode service's inside OpenCode, your shell's in the terminal). Relative entries are ignored, and so is anything inside the project folder, including a `bl` that links into it. Your home folder is not a project, so `~/.local/bin` and nvm folders work.
 - On Windows, use WSL. Native `bl.exe` and `.cmd` shims are not supported.
 - Team plans, China-only `alibaba-token-plan-cn` runtimes, and cookie-based console scraping are not supported.

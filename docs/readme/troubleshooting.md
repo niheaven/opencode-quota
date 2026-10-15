@@ -161,7 +161,8 @@ Check the `alibaba-token-plan` section (separate from Alibaba Coding Plan).
 | ----------------------- | --- |
 | CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder (for example `/opt/homebrew/bin`, `~/.local/bin`, or an nvm folder). On Windows, use WSL. See [setup](providers.md#alibaba-personal-token-plan). |
 | Console session expired | Run `bl auth login --console`. A Coding Plan API key cannot sign in to this provider. |
-| Weekly row only         | The official CLI may leave out the five-hour window. OpenCode Quota does not invent it. |
+| No monthly row          | `bl` reported no monthly percentage, so the plan may be unlimited. Verify it in the Bailian Token Plan console. OpenCode Quota does not invent a row. |
+| Upgrade notice          | An old `bl` still reporting the removed five-hour and weekly windows. Upgrade with `npm install -g bailian-cli`. |
 | JSON export empty       | `show --json` is cache-only, and this provider is not cached, so a separate CLI process reports it unavailable instead of running `bl`. |
 
 </details>
