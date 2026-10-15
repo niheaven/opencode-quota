@@ -105,7 +105,7 @@ Run `/quota_status` first. Every known provider has a section named after its id
 </details>
 
 <details>
-<summary><strong>Alibaba Personal Token Plan</strong></summary>
+<summary><strong>Alibaba Token Plan</strong></summary>
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
