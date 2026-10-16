@@ -141,7 +141,7 @@ describe("row facts", () => {
     const noReset = quotaRow("x.a", { percentRemaining: 30 });
     expect([
       factsOf(paced(80)).paceLevel,
-      factsOf(paced(50)).paceLevel,
+      factsOf(paced(47)).paceLevel,
       factsOf(paced(30), { pace: "all" }).paceLevel,
       factsOf(noReset).paceLevel,
     ]).toEqual(["good", "warning", "low", undefined]);

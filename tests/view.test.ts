@@ -170,7 +170,11 @@ describe("view format", () => {
 
   it.each([
     { kind: "spare", evenLeft: 50, left: 80, expected: "good" },
-    { kind: "on_track", evenLeft: 50, left: 50, expected: "warning" },
+    { kind: "on_track", evenLeft: 50, left: 54, expected: "good" },
+    { kind: "on_track", evenLeft: 50, left: 50, expected: "good" },
+    { kind: "on_track", evenLeft: 50, left: 46, expected: "warning" },
+    // Untouched at the window's start, when even use still leaves about 100%.
+    { kind: "on_track", evenLeft: 98, left: 100, expected: "good" },
     { kind: "fast", evenLeft: 50, left: 30, expected: "low" },
     // Under a tenth of the window passed: one burst of use is no run-out yet.
     { kind: "fast", evenLeft: 95, left: 50, expected: "warning" },
