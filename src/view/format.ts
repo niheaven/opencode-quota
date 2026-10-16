@@ -142,16 +142,16 @@ export function levelOf(percentRemaining: number, thresholds: Thresholds): Level
 /**
  * The level for a pace: "good" at or under even use, "warning" up to 5 points faster, "low"
  * faster than that. At a window's start even use leaves about 100%, so an untouched limit is
- * on track; it reads as good, not as a warning. Before a tenth of the window has passed one
- * burst of use reads as fast, so fast is "warning" until then, unless nothing is left.
+ * on track; it reads as good, not as a warning. Before a tenth of the window has passed, one
+ * burst of use reads as fast, so a fast pace gives no level and the row keeps the share-left
+ * colors: a nearly used-up limit is still "low" then.
  */
-export function paceLevel(pace: Pace, percentRemaining: number): Level {
+export function paceLevel(pace: Pace, percentRemaining: number): Level | undefined {
   if (pace.kind === "spare") return "good";
   if (pace.kind === "on_track") {
     return clampPercent(percentRemaining) >= pace.evenLeft ? "good" : "warning";
   }
-  const early = pace.evenLeft > (1 - MIN_ELAPSED_SHARE) * 100;
-  return early && percentRemaining > 0 ? "warning" : "low";
+  return pace.evenLeft > (1 - MIN_ELAPSED_SHARE) * 100 ? undefined : "low";
 }
 
 function groupDigits(integer: string): string {

@@ -101,7 +101,7 @@ describe("colored quota toasts", () => {
     ]);
   });
 
-  it("colors the bars by pace when they follow it, and by the share left without a reset", () => {
+  it("colors the bars by pace when they follow it, and by the share left without a pace", () => {
     const toast = lines([
       provider("anthropic", "Claude", [
         // 15% left 10 minutes before the reset: plenty to spare.
@@ -121,6 +121,15 @@ describe("colored quota toasts", () => {
         // No reset, so no pace: 15% left stays almost out.
         quotaRow("anthropic.monthly", { label: "Monthly", window: "month", percentRemaining: 15 }),
       ]),
+      provider("zai", "Z.ai", [
+        // 5% left 10 minutes into the window: too early for pace, and nearly used up.
+        quotaRow("zai.five_hour", {
+          label: "5h",
+          window: "five_hour",
+          percentRemaining: 5,
+          resetsAt: at(290 * MINUTE),
+        }),
+      ]),
     ]);
     const percentColors = (levelBy: "left" | "pace") => {
       const display = defaultDisplaySettings();
@@ -134,11 +143,13 @@ describe("colored quota toasts", () => {
       ["15% left", "red"],
       ["60% left", "green"],
       ["15% left", "red"],
+      ["5% left", "red"],
     ]);
     expect(percentColors("pace")).toEqual([
       ["15% left", "green"],
       ["60% left", "red"],
       ["15% left", "red"],
+      ["5% left", "red"],
     ]);
   });
 

@@ -176,9 +176,9 @@ describe("view format", () => {
     // Untouched at the window's start, when even use still leaves about 100%.
     { kind: "on_track", evenLeft: 98, left: 100, expected: "good" },
     { kind: "fast", evenLeft: 50, left: 30, expected: "low" },
-    // Under a tenth of the window passed: one burst of use is no run-out yet.
-    { kind: "fast", evenLeft: 95, left: 50, expected: "warning" },
-    { kind: "fast", evenLeft: 95, left: 0, expected: "low" },
+    // Under a tenth of the window passed: no level, so the share left decides.
+    { kind: "fast", evenLeft: 95, left: 50, expected: undefined },
+    { kind: "fast", evenLeft: 95, left: 0, expected: undefined },
     { kind: "fast", evenLeft: 90, left: 50, expected: "low" },
   ] as const)(
     "$kind with $left% left and $evenLeft% of the window to come is $expected",

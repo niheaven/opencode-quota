@@ -99,11 +99,12 @@ export function rowFacts(item: VisibleRow, group: Pick<Group, "rows">, place: Pl
   const resetIn = (style: Words["reset"]) =>
     Number.isFinite(resetMs) ? formatDuration(resetMs - nowMs, style, words.resetDecimals) : "";
   const pace = paceOf(row, nowMs);
+  const level = pace && paceLevel(pace, percent);
   return {
     id: row.id,
     name,
     percent,
-    ...(pace ? { paceLevel: paceLevel(pace, percent) } : {}),
+    ...(level ? { paceLevel: level } : {}),
     value: percentText(words, percent, withWord),
     reset: resetIn(times),
     shortReset: resetIn("short"),

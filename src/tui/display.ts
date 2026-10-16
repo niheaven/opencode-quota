@@ -297,7 +297,7 @@ export const FIELDS: readonly Field[] = [
   runsOutField("toast", "after the row"),
   ...COLOR_FIELDS.slice(0, 4),
   field("colors.levelBy", "Bar colors follow", SHOW.levelBy, {
-    note: "pace: at or under even use, a little faster, or faster than it refills; a limit without a reset follows the share left",
+    note: "pace: at or under even use, a little faster, or faster than it refills; the share left without a reset or in a window's first tenth",
   }),
   field("colors.warningBelow", "'Getting low' below", percentLeft, {
     values: THRESHOLDS,
