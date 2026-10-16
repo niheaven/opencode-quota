@@ -255,6 +255,7 @@ const SHOW = {
   models: named({ false: "all", true: "current model's only" }),
   tokens: named({ current: "this session", tree: "with subagents" }),
   limitHit: named({ false: "retry like normal", true: "wait for the reset" }),
+  levelBy: named({ left: "the share left", pace: "your pace" }),
 } satisfies Record<string, Show>;
 // "Getting low" stays at or above "almost out", so ‹ › skip the values that would break that.
 const warningChoices = (settings: DisplaySettings) =>
@@ -295,6 +296,9 @@ export const FIELDS: readonly Field[] = [
   field("toast.sessionTokens", "Session tokens line", SHOW.tokensLine),
   runsOutField("toast", "after the row"),
   ...COLOR_FIELDS.slice(0, 4),
+  field("colors.levelBy", "Bar colors follow", SHOW.levelBy, {
+    note: "pace: plenty to spare, on track, or faster than it refills; a limit without a reset follows the share left",
+  }),
   field("colors.warningBelow", "'Getting low' below", percentLeft, {
     values: THRESHOLDS,
     choices: warningChoices,

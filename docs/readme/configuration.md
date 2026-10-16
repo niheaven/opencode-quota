@@ -72,10 +72,11 @@ Each section has `show: true`, `runsOut` (`true` for `sidebar` and `toast`, `fal
 
 ### Colors
 
-Roles are `good`, `warning`, `low`, `empty`, `title`, `provider`, `account`, `label`, `percent`, `reset`, `value`, `error`, `statusName`, `separator`, and `arrows`. Each `colors.<role>` follows the theme when unset. Set a role to `text`, `muted`, `accent`, `green`, `yellow`, `red`, `blue`, `bar` (the row's level color), or a `#rrggbb` color.
+Roles are `good`, `warning`, `low`, `empty`, `title`, `provider`, `account`, `label`, `percent`, `reset`, `value`, `error`, `statusName`, `separator`, and `arrows`. Each `colors.<role>` follows the theme when unset. Set a role to `text`, `muted`, `accent`, `green`, `yellow`, `red`, `blue`, `bar`, or a `#rrggbb` color. `bar` follows the row's level color: by the share left against `colors.warningBelow` and `colors.lowBelow`, or by pace with `colors.levelBy: "pace"`.
 
 | Setting | Default | Values |
 | --- | --- | --- |
+| `colors.levelBy` | `"left"` | `left` or `pace`. With `pace`, the level colors follow how fast a limit is used against even use until its reset: `good` with plenty to spare, `warning` on track (within 5 points of even use), `low` used faster than it refills. Before a tenth of the window has passed, a fast pace is `warning` unless nothing is left. A row without a reset time or a known window length follows the share left. Toasts after a reply still go by the share left. **Bar colors follow** on the Colors tab. |
 | `colors.warningBelow` | `50` | Whole number 0–100, percent left below which quota is getting low. |
 | `colors.lowBelow` | `20` | Whole number 0–100, percent left below which quota is almost out. |
 
