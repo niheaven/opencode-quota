@@ -105,17 +105,29 @@ Run `/quota_status` first. Every known provider has a section named after its id
 </details>
 
 <details>
+<summary><strong>Alibaba Coding Plan</strong></summary>
+
+| Symptom                 | Fix |
+| ----------------------- | --- |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with `node`. See [setup](providers.md#alibaba-coding-plan). |
+| Console session missing | The Coding Plan is read through the console session: run `bl auth login --console`. |
+| No rows and no error    | The account has no Coding Plan subscription: the CLI prints `{}`, and OpenCode Quota then shows no rows, which is not a failure. |
+| Provider not detected   | Make sure the requests use OpenCode's `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `alibaba`, or `alibaba-cn` provider. |
+
+</details>
+
+<details>
 <summary><strong>Alibaba Token Plan</strong></summary>
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
-| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder (for example `/opt/homebrew/bin`, `~/.local/bin`, an nvm folder, or `%APPDATA%\npm`). A native `bl` is run directly; npm's `bl.cmd` shim is resolved to the package's node entry and run with `node`. Other launchers (`.ps1`, `.bat`, a `bl` linking to `cmd.exe`) are refused. See [setup](providers.md#alibaba-token-plan). |
-| Console session expired (the personal `Monthly` row) | Run `bl auth login --console`. The personal row needs the console session; an AK/SK only covers the team seats. |
-| Team seats show no rows | Team seats use a different command with API Key (AK/SK) credentials: run `bl auth login --open-api`, or set `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`. The personal row is unaffected. A released seat (`status` other than `NORMAL`) has no row by design. |
-| The wrong plan, or no monthly row | The command carries no region or account: you see the plan `bl` is signed in to. `bl auth status` reports which account, region and site that is. |
-| No monthly row          | `bl` reported no monthly percentage, so the plan may be unlimited — or the subscription has expired, which prints the same reply. Verify it in the Bailian Token Plan console. OpenCode Quota does not invent a row. `/quota_status` says the same under `window_hint`. |
-| Old `bl`, nothing shown | `bailian-cli` 2.2.0 replaced the five-hour and weekly windows with one monthly window; older builds report only the removed ones, so the reply parses as no window. Upgrade with `npm install -g bailian-cli`. |
-| JSON export empty       | `show --json` is cache-only, and this provider's rows are saved and shared between OpenCode windows, so the export fills after a live check instead of running `bl`. |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with `node`. See [setup](providers.md#alibaba-token-plan). |
+| Console session expired | The personal `Monthly` row needs the console session: run `bl auth login --console`. An AK/SK covers the team seats only. |
+| Team seats show no rows | Team seats need API Key (AK/SK) credentials: run `bl auth login --open-api`, or set `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`. A released seat has no row by design. |
+| The wrong plan          | The command carries no region or account: you see the plan `bl` is signed in to. `bl auth status` reports which account, region and site that is. |
+| No monthly row          | `bl` reported no monthly percentage, so the plan may be unlimited — or the subscription has expired, which prints the same reply. Check it in the Bailian Token Plan console. |
+| Old `bl`, nothing shown | `bailian-cli` 2.2.0 replaced the five-hour and weekly windows with one monthly window; older builds report only the removed ones. Upgrade with `npm install -g bailian-cli`. |
+| JSON export empty       | `show --json` is cache-only, so the export fills after a live check instead of running `bl`. |
 
 </details>
 
