@@ -36,6 +36,7 @@ describe("core/pace", () => {
     // 20 of 300 minutes passed: even use leaves about 93%.
     const pace = paceOf(row({ percentRemaining: 50, resetsAt: at(280) }), NOW);
     expect(pace?.kind).toBe("fast");
+    expect(pace?.early).toBe(true);
     expect(pace?.runsOutInMs).toBeUndefined();
     expect(pace?.evenLeft).toBeCloseTo((280 / 300) * 100);
   });
