@@ -104,8 +104,8 @@ Melde dich mit `/connect` an, und der Anbieter erscheint. Schalte Anbieter in `/
 
 | China | Tarife |
 | --- | --- |
-| Alibaba Coding Plan | Privat |
-| [Alibaba Personal Token Plan](../providers.md#alibaba-personal-token-plan)\* | Privat |
+| [Alibaba Coding Plan](../providers.md#alibaba-coding-plan)\* | Privat |
+| [Alibaba Token Plan](../providers.md#alibaba-token-plan)\* | Privat · Business |
 | DeepSeek | Privat |
 | Kimi Code | Privat · Business |
 | Kimi Code (CN) | Privat · Business |
@@ -121,7 +121,7 @@ Melde dich mit `/connect` an, und der Anbieter erscheint. Schalte Anbieter in `/
 
 \* Verlinkte Namen brauchen einen Schritt mehr; die übrigen funktionieren, sobald du angemeldet bist. [Was jeder Anbieter meldet](../providers.md#pre-configured-providers).
 
-Das ChatGPT-Kontingent von OpenAI braucht einen Codex-Login ([so geht's](../providers.md#openai-and-xai)). Gemini CLI funktioniert nur mit Konten für Gemini Code Assist Standard oder Enterprise (Organisation). Private Google-Nutzer sollten Google AGY verwenden. Business-Tarife der chinesischen Anbieter zeigen nur die Nutzung deines eigenen Mitglieds-API-Schlüssels. API-Schlüssel kommen aus OpenCode oder aus einer [Umgebungsvariable](../providers.md#api-keys).
+Das ChatGPT-Kontingent von OpenAI braucht einen Codex-Login ([so geht's](../providers.md#openai-and-xai)). Gemini CLI funktioniert nur mit Konten für Gemini Code Assist Standard oder Enterprise (Organisation). Private Google-Nutzer sollten Google AGY verwenden. Business-Tarife der chinesischen Anbieter zeigen nur die Nutzung deines eigenen Mitglieds-API-Schlüssels, außer Alibaba Token Plan, der pro Team-Platz eine Credits-Zeile zeigt. API-Schlüssel kommen aus OpenCode oder aus einer [Umgebungsvariable](../providers.md#api-keys).
 
 ### Eigene Anbieter
 

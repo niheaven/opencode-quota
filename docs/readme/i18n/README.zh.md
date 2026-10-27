@@ -104,8 +104,8 @@ opencode plugin add @slkiser/opencode-quota
 
 | 中国 | 套餐 |
 | --- | --- |
-| Alibaba Coding Plan | 个人 |
-| [Alibaba Personal Token Plan](../providers.md#alibaba-personal-token-plan)\* | 个人 |
+| [Alibaba Coding Plan](../providers.md#alibaba-coding-plan)\* | 个人 |
+| [Alibaba Token Plan](../providers.md#alibaba-token-plan)\* | 个人 · 企业 |
 | DeepSeek | 个人 |
 | Kimi Code | 个人 · 企业 |
 | Kimi Code (CN) | 个人 · 企业 |
@@ -121,7 +121,7 @@ opencode plugin add @slkiser/opencode-quota
 
 \* 带链接的名称还需要多做一步；其余的登录后即可使用。[每个提供商报告哪些内容](../providers.md#pre-configured-providers)。
 
-OpenAI ChatGPT 配额需要 Codex 登录（[方法](../providers.md#openai-and-xai)）。Gemini CLI 仅适用于 Gemini Code Assist Standard 或 Enterprise（组织）账号。个人 Google 用户请使用 Google AGY。中国提供商的企业套餐只显示你自己的成员 API 密钥的用量。API 密钥来自 OpenCode 或[环境变量](../providers.md#api-keys)。
+OpenAI ChatGPT 配额需要 Codex 登录（[方法](../providers.md#openai-and-xai)）。Gemini CLI 仅适用于 Gemini Code Assist Standard 或 Enterprise（组织）账号。个人 Google 用户请使用 Google AGY。中国提供商的企业套餐只显示你自己的成员 API 密钥的用量，但 Alibaba Token Plan 会为每个团队席位显示一行 Credits。API 密钥来自 OpenCode 或[环境变量](../providers.md#api-keys)。
 
 ### 自定义提供商
 

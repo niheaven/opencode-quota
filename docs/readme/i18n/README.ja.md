@@ -104,8 +104,8 @@ OpenCode を再起動して `/quota` と入力します。上限を表示する�
 
 | 中国 | プラン |
 | --- | --- |
-| Alibaba Coding Plan | 個人 |
-| [Alibaba Personal Token Plan](../providers.md#alibaba-personal-token-plan)\* | 個人 |
+| [Alibaba Coding Plan](../providers.md#alibaba-coding-plan)\* | 個人 |
+| [Alibaba Token Plan](../providers.md#alibaba-token-plan)\* | 個人 · ビジネス |
 | DeepSeek | 個人 |
 | Kimi Code | 個人 · ビジネス |
 | Kimi Code (CN) | 個人 · ビジネス |
@@ -121,7 +121,7 @@ OpenCode を再起動して `/quota` と入力します。上限を表示する�
 
 \* リンク付きの名前は、追加の手順が 1 つ必要です。それ以外はログインするだけで使えます。[各プロバイダーが報告する内容](../providers.md#pre-configured-providers)。
 
-OpenAI の ChatGPT クォータには Codex でのログインが必要です（[方法](../providers.md#openai-and-xai)）。Gemini CLI は Gemini Code Assist Standard または Enterprise（組織）のアカウントでのみ動作します。個人の Google ユーザーは Google AGY を使ってください。中国のプロバイダーのビジネスプランでは、あなた自身のメンバー API キーの使用量だけが表示されます。API キーは OpenCode または[環境変数](../providers.md#api-keys)から取得されます。
+OpenAI の ChatGPT クォータには Codex でのログインが必要です（[方法](../providers.md#openai-and-xai)）。Gemini CLI は Gemini Code Assist Standard または Enterprise（組織）のアカウントでのみ動作します。個人の Google ユーザーは Google AGY を使ってください。中国のプロバイダーのビジネスプランでは、あなた自身のメンバー API キーの使用量だけが表示されます。ただし Alibaba Token Plan は、チームのシートごとに Credits 行を 1 つ表示します。API キーは OpenCode または[環境変数](../providers.md#api-keys)から取得されます。
 
 ### カスタムプロバイダー
 

@@ -104,8 +104,8 @@ Inicia sesión con `/connect` y el proveedor aparece. Activa o desactiva proveed
 
 | Chinos | Planes |
 | --- | --- |
-| Alibaba Coding Plan | Personal |
-| [Alibaba Personal Token Plan](../providers.md#alibaba-personal-token-plan)\* | Personal |
+| [Alibaba Coding Plan](../providers.md#alibaba-coding-plan)\* | Personal |
+| [Alibaba Token Plan](../providers.md#alibaba-token-plan)\* | Personal · Empresa |
 | DeepSeek | Personal |
 | Kimi Code | Personal · Empresa |
 | Kimi Code (CN) | Personal · Empresa |
@@ -121,7 +121,7 @@ Inicia sesión con `/connect` y el proveedor aparece. Activa o desactiva proveed
 
 \* Los nombres con enlace necesitan un paso más; el resto funciona en cuanto inicias sesión. [Qué informa cada uno](../providers.md#pre-configured-providers).
 
-La cuota de ChatGPT de OpenAI necesita iniciar sesión con Codex ([cómo](../providers.md#openai-and-xai)). Gemini CLI solo funciona con cuentas de Gemini Code Assist Standard o Enterprise (organización). Los usuarios personales de Google deben usar Google AGY. Los planes Empresa de los proveedores chinos muestran solo el uso de tu propia clave de API de miembro. Las claves de API vienen de OpenCode o de una [variable de entorno](../providers.md#api-keys).
+La cuota de ChatGPT de OpenAI necesita iniciar sesión con Codex ([cómo](../providers.md#openai-and-xai)). Gemini CLI solo funciona con cuentas de Gemini Code Assist Standard o Enterprise (organización). Los usuarios personales de Google deben usar Google AGY. Los planes Empresa de los proveedores chinos muestran solo el uso de tu propia clave de API de miembro, excepto Alibaba Token Plan, que muestra una fila Credits por cada puesto del equipo. Las claves de API vienen de OpenCode o de una [variable de entorno](../providers.md#api-keys).
 
 ### Proveedores personalizados
 
