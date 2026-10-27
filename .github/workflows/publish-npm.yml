@@ -102,7 +102,7 @@ jobs:
           path: package-artifacts
 
       - name: Smoke exact release artifact on Node ${{ matrix.node-version }}
-        run: node scripts/smoke-packed-package.mjs package-artifacts
+        run: node .github/scripts/smoke-packed-package.mjs package-artifacts
 
   publish:
     runs-on: ubuntu-latest
@@ -148,7 +148,7 @@ jobs:
         env:
           DIST_TAG: ${{ steps.dist-tag.outputs.dist-tag }}
         run: |
-          node scripts/verify-release-artifact.mjs package-artifacts
+          node .github/scripts/verify-release-artifact.mjs package-artifacts
           TARBALLS=(package-artifacts/*.tgz)
           if [ "${#TARBALLS[@]}" -ne 1 ]; then
             echo "Expected exactly one release tarball." >&2

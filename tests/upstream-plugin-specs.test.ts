@@ -4,7 +4,7 @@ import {
   getUpstreamPluginSpec,
   UPSTREAM_PLUGIN_REFERENCE_ROOT,
   UPSTREAM_PLUGIN_SPECS,
-} from "../scripts/lib/upstream-plugin-specs.mjs";
+} from "../.github/scripts/lib/upstream-plugin-specs.mjs";
 import { CURSOR_CANONICAL_PLUGIN_PACKAGE } from "../src/lib/cursor-detection.js";
 
 describe("upstream-plugin-specs", () => {

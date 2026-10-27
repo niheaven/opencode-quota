@@ -6,7 +6,7 @@ const V4_BASE_COMMIT = process.env.V4_HISTORY_BASE ?? "0bfd899";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = process.env.V4_HISTORY_REPO
   ? path.resolve(process.env.V4_HISTORY_REPO)
-  : path.resolve(scriptDir, "..");
+  : path.resolve(scriptDir, "../..");
 
 function git(args) {
   const result = spawnSync("git", args, {

@@ -38,5 +38,5 @@ AGENTS.md
 /local-live-tests/
 
 # Tracked upstream plugin copies (they contain dist/ folders)
-!/scripts/upstream-plugins/
-!/scripts/upstream-plugins/**
+!/.github/scripts/upstream-plugins/
+!/.github/scripts/upstream-plugins/**

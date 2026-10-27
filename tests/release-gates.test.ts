@@ -11,14 +11,16 @@ import { isolatedGitEnv } from "./helpers/isolated-git-env.js";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const packageScript = fileURLToPath(
-  new URL("../scripts/verify-package-contents.mjs", import.meta.url),
+  new URL("../.github/scripts/verify-package-contents.mjs", import.meta.url),
 );
 const artifactScript = fileURLToPath(
-  new URL("../scripts/verify-release-artifact.mjs", import.meta.url),
+  new URL("../.github/scripts/verify-release-artifact.mjs", import.meta.url),
 );
-const historyScript = fileURLToPath(new URL("../scripts/verify-v4-history.mjs", import.meta.url));
+const historyScript = fileURLToPath(
+  new URL("../.github/scripts/verify-v4-history.mjs", import.meta.url),
+);
 const typescriptScript = fileURLToPath(
-  new URL("../scripts/verify-typescript-version.mjs", import.meta.url),
+  new URL("../.github/scripts/verify-typescript-version.mjs", import.meta.url),
 );
 const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
   main: string;
@@ -276,7 +278,7 @@ describe("v4 release gates", () => {
       "prompt-exports/review.md",
       "opencode-quota/opencode.db",
       "tests/package-manifest.test.ts",
-      "scripts/verify-release-version.mjs",
+      ".github/scripts/verify-release-version.mjs",
       "images/opencode-quota-logo-dark.svg",
       "images/opencode-quota-logo-light.svg",
       "images/opencode-quota_opencode-quota-sidebar.webp",

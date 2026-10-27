@@ -14,10 +14,10 @@ if (nodeMajor !== 24) {
 }
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(scriptDir, "../..");
 const outputArg = process.argv[2];
 if (!outputArg) {
-  console.error("Usage: node scripts/pack-release-package.mjs <empty-artifact-directory>");
+  console.error("Usage: node .github/scripts/pack-release-package.mjs <empty-artifact-directory>");
   process.exit(1);
 }
 
@@ -72,7 +72,7 @@ const packManifestPath = path.join(artifactDir, "pack-manifest.json");
 
 try {
   await writeFile(packManifestPath, packJson, "utf8");
-  run(process.execPath, ["scripts/verify-package-contents.mjs", packManifestPath], {
+  run(process.execPath, [".github/scripts/verify-package-contents.mjs", packManifestPath], {
     stdio: "inherit",
   });
 

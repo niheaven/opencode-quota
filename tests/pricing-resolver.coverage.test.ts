@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vite-plus/test";
-import { CURSOR_MODEL_COSTS } from "../scripts/upstream-plugins/cursor-opencode-provider/dist/pricing-data.js";
+import { CURSOR_MODEL_COSTS } from "../.github/scripts/upstream-plugins/cursor-opencode-provider/dist/pricing-data.js";
 import {
   CURSOR_OFFICIAL_MODEL_ALIASES,
   lookupCursorLocalCost,

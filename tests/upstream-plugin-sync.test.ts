@@ -27,7 +27,13 @@ vi.mock("node:child_process", async () => {
         }
 
         await fs.mkdir(destinationPath, { recursive: true });
-        const fixtureRoot = pathModule.join(process.cwd(), "scripts", "upstream-plugins", pluginId);
+        const fixtureRoot = pathModule.join(
+          process.cwd(),
+          ".github",
+          "scripts",
+          "upstream-plugins",
+          pluginId,
+        );
         await fs.cp(fixtureRoot, destinationPath, { recursive: true });
         callback(null);
       })().catch((error) => callback(error as Error));
@@ -35,19 +41,19 @@ vi.mock("node:child_process", async () => {
   };
 });
 
-vi.mock("../scripts/lib/upstream-plugin-paths.mjs", () => ({
+vi.mock("../.github/scripts/lib/upstream-plugin-paths.mjs", () => ({
   get repoRoot() {
     return testState.repoRoot;
   },
   get upstreamPluginReferenceRoot() {
-    return `${testState.repoRoot}/scripts/upstream-plugins`;
+    return `${testState.repoRoot}/.github/scripts/upstream-plugins`;
   },
   get upstreamPluginLockPath() {
-    return `${testState.repoRoot}/scripts/upstream-plugins/lock.json`;
+    return `${testState.repoRoot}/.github/scripts/upstream-plugins/lock.json`;
   },
 }));
 
-vi.mock("../scripts/lib/upstream-plugin-registry.mjs", async () => {
+vi.mock("../.github/scripts/lib/upstream-plugin-registry.mjs", async () => {
   const fs = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
 
   return {
@@ -65,7 +71,7 @@ vi.mock("../scripts/lib/upstream-plugin-registry.mjs", async () => {
 });
 
 async function seedReferenceRoot(repoRoot: string) {
-  const referenceRoot = path.join(repoRoot, "scripts", "upstream-plugins");
+  const referenceRoot = path.join(repoRoot, ".github", "scripts", "upstream-plugins");
   await mkdir(referenceRoot, { recursive: true });
   await writeFile(path.join(referenceRoot, "README.md"), "reference readme\n", "utf8");
   await writeFile(
@@ -77,7 +83,7 @@ async function seedReferenceRoot(repoRoot: string) {
             npmUrl: "https://www.npmjs.com/package/cursor-opencode-provider/v/1.0.0",
             packageName: "cursor-opencode-provider",
             publishedAt: "2026-03-01T00:00:00.000Z",
-            referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+            referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
             repo: "oakimov/cursor-opencode-provider",
             version: "1.0.0",
           },
@@ -85,7 +91,7 @@ async function seedReferenceRoot(repoRoot: string) {
             npmUrl: "https://www.npmjs.com/package/opencode-gemini-auth/v/1.0.0",
             packageName: "opencode-gemini-auth",
             publishedAt: "2026-03-01T00:00:00.000Z",
-            referenceDir: "scripts/upstream-plugins/opencode-gemini-auth",
+            referenceDir: ".github/scripts/upstream-plugins/opencode-gemini-auth",
             repo: "jenslys/opencode-gemini-auth",
             version: "1.0.0",
           },
@@ -93,7 +99,7 @@ async function seedReferenceRoot(repoRoot: string) {
             npmUrl: "https://www.npmjs.com/package/%40anthonyhaussman/opencode-agy-auth/v/1.0.0",
             packageName: "@anthonyhaussman/opencode-agy-auth",
             publishedAt: "2026-03-01T00:00:00.000Z",
-            referenceDir: "scripts/upstream-plugins/opencode-agy-auth",
+            referenceDir: ".github/scripts/upstream-plugins/opencode-agy-auth",
             repo: "anthonyhaussman/opencode-agy-auth",
             version: "1.0.0",
           },
@@ -136,7 +142,7 @@ describe("upstream-plugin-sync", () => {
           packageName: "cursor-opencode-provider",
           pluginId: "cursor-opencode-provider",
           publishedAt: "2026-03-20T00:00:00.000Z",
-          referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+          referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
           repo: "oakimov/cursor-opencode-provider",
           tarballUrl:
             "https://example.test/cursor-opencode-provider/-/cursor-opencode-provider-2.0.0.tgz",
@@ -150,7 +156,7 @@ describe("upstream-plugin-sync", () => {
           packageName: "opencode-gemini-auth",
           pluginId: "opencode-gemini-auth",
           publishedAt: "2026-03-20T00:00:00.000Z",
-          referenceDir: "scripts/upstream-plugins/opencode-gemini-auth",
+          referenceDir: ".github/scripts/upstream-plugins/opencode-gemini-auth",
           repo: "jenslys/opencode-gemini-auth",
           tarballUrl: "https://example.test/opencode-gemini-auth-2.0.0.tgz",
           version: "2.0.0",
@@ -163,7 +169,7 @@ describe("upstream-plugin-sync", () => {
           packageName: "@anthonyhaussman/opencode-agy-auth",
           pluginId: "opencode-agy-auth",
           publishedAt: "2026-03-20T00:00:00.000Z",
-          referenceDir: "scripts/upstream-plugins/opencode-agy-auth",
+          referenceDir: ".github/scripts/upstream-plugins/opencode-agy-auth",
           repo: "anthonyhaussman/opencode-agy-auth",
           tarballUrl:
             "https://example.test/@anthonyhaussman/opencode-agy-auth/-/opencode-agy-auth-2.0.0.tgz",
@@ -187,9 +193,9 @@ describe("upstream-plugin-sync", () => {
 
   it("stages the full reference tree before swapping it into place", async () => {
     const { syncUpstreamPluginReferences } =
-      await import("../scripts/lib/upstream-plugin-sync.mjs");
+      await import("../.github/scripts/lib/upstream-plugin-sync.mjs");
     const result = await syncUpstreamPluginReferences();
-    const referenceRoot = path.join(testState.repoRoot, "scripts", "upstream-plugins");
+    const referenceRoot = path.join(testState.repoRoot, ".github", "scripts", "upstream-plugins");
 
     expect(result.syncedPlugins).toHaveLength(3);
     await expect(readFile(path.join(referenceRoot, "README.md"), "utf8")).resolves.toBe(
@@ -233,6 +239,7 @@ describe("upstream-plugin-sync", () => {
 
     const geminiDistDir = path.join(
       testState.repoRoot,
+      ".github",
       "scripts",
       "upstream-plugins",
       "opencode-gemini-auth",
@@ -246,10 +253,10 @@ describe("upstream-plugin-sync", () => {
     );
 
     const { syncUpstreamPluginReferences } =
-      await import("../scripts/lib/upstream-plugin-sync.mjs");
+      await import("../.github/scripts/lib/upstream-plugin-sync.mjs");
     await syncUpstreamPluginReferences();
 
-    const referenceRoot = path.join(testState.repoRoot, "scripts", "upstream-plugins");
+    const referenceRoot = path.join(testState.repoRoot, ".github", "scripts", "upstream-plugins");
     const geminiBundle = await readFile(
       path.join(referenceRoot, "opencode-gemini-auth", "dist", "index.js"),
       "utf8",
@@ -267,14 +274,14 @@ describe("upstream-plugin-sync", () => {
       version: "1.0.0",
     });
 
-    const referenceRoot = path.join(testState.repoRoot, "scripts", "upstream-plugins");
+    const referenceRoot = path.join(testState.repoRoot, ".github", "scripts", "upstream-plugins");
     const lockPath = path.join(referenceRoot, "lock.json");
     const lock = JSON.parse(await readFile(lockPath, "utf8"));
     lock.plugins["cursor-opencode-provider"] = {
       npmUrl: "https://www.npmjs.com/package/%40old-scope/cursor-opencode-provider/v/1.0.0",
       packageName: "@old-scope/cursor-opencode-provider",
       publishedAt: "2026-03-01T00:00:00.000Z",
-      referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+      referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
       repo: "old-owner/cursor-opencode-provider",
       version: "1.0.0",
     };
@@ -290,7 +297,7 @@ describe("upstream-plugin-sync", () => {
     );
 
     const { syncUpstreamPluginReferences } =
-      await import("../scripts/lib/upstream-plugin-sync.mjs");
+      await import("../.github/scripts/lib/upstream-plugin-sync.mjs");
     await syncUpstreamPluginReferences();
 
     const packageJson = await readFile(
@@ -308,8 +315,8 @@ describe("upstream-plugin-sync", () => {
     testState.failPluginId = "cursor-opencode-provider";
 
     const { syncUpstreamPluginReferences } =
-      await import("../scripts/lib/upstream-plugin-sync.mjs");
-    const referenceRoot = path.join(testState.repoRoot, "scripts", "upstream-plugins");
+      await import("../.github/scripts/lib/upstream-plugin-sync.mjs");
+    const referenceRoot = path.join(testState.repoRoot, ".github", "scripts", "upstream-plugins");
 
     await expect(syncUpstreamPluginReferences()).rejects.toThrow("Failed to extract");
 

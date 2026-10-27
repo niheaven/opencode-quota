@@ -38,7 +38,7 @@ const viteConfig = await text("../vite.config.ts");
 const lefthookConfig = parse(await text("../lefthook.yml"));
 const ciWorkflow = parse(await text("../.github/workflows/ci.yml")) as Workflow;
 const publishWorkflow = parse(await text("../.github/workflows/publish-npm.yml")) as Workflow;
-const packedSmoke = await text("../scripts/smoke-packed-package.mjs");
+const packedSmoke = await text("../.github/scripts/smoke-packed-package.mjs");
 
 // Pinned to a commit; Vite+ installs the pnpm named in package.json `packageManager`.
 const SETUP_VP = "voidzero-dev/setup-vp@68f39c78aaf39be468cabd2afb09c162574c84af";
@@ -91,7 +91,7 @@ describe("package manifest compatibility", () => {
   it("pins the runtime, toolchain, entrypoints and published files in package.json", () => {
     const pnpmMajor = String(pkg.packageManager).match(/^pnpm@(\d+)\.\d+\.\d+(?:[+-].*)?$/)?.[1];
     expect(Number(pnpmMajor)).toBeGreaterThanOrEqual(11);
-    expect(pkg.scripts?.build).toContain("node scripts/clean-dist.mjs && tsc");
+    expect(pkg.scripts?.build).toContain("node .github/scripts/clean-dist.mjs && tsc");
     expect(pkg.pnpm?.strictPeerDependencies).not.toBe(false);
 
     const entry = (main: string) => ({
@@ -151,9 +151,9 @@ describe("package manifest compatibility", () => {
       ["exports", "./server", entry("index")],
       ["exports", "./tui", entry("tui")],
       ["files", null, ["dist", "README.md", "LICENSE"]],
-      ["scripts", "verify:package-contents", "node scripts/verify-package-contents.mjs"],
-      ["scripts", "pack:release-package", "node scripts/pack-release-package.mjs"],
-      ["scripts", "verify:release-package", "node scripts/verify-release-package.mjs"],
+      ["scripts", "verify:package-contents", "node .github/scripts/verify-package-contents.mjs"],
+      ["scripts", "pack:release-package", "node .github/scripts/pack-release-package.mjs"],
+      ["scripts", "verify:release-package", "node .github/scripts/verify-release-package.mjs"],
     ];
     for (const [section, key, value] of expected) {
       const actual = key === null ? pkg[section] : pkg[section]?.[key];
@@ -189,7 +189,7 @@ describe("package manifest compatibility", () => {
     const removed = [
       "../.prettierignore",
       "../.prettierrc.json",
-      "../scripts/verify-v4-formatting.mjs",
+      "../.github/scripts/verify-v4-formatting.mjs",
       "../.husky",
       "../.lintstagedrc",
       "../biome.json",
@@ -204,7 +204,7 @@ describe("package manifest compatibility", () => {
   it.each([
     [
       "the TypeScript version check (peer mismatch reported, not suppressed)",
-      "../scripts/verify-typescript-version.mjs",
+      "../.github/scripts/verify-typescript-version.mjs",
       [
         'const EXPECTED_TYPESCRIPT_VERSION = "7.0.2";',
         'const EXPECTED_PLUGIN_VERSION = "2.0.28";',
@@ -232,12 +232,22 @@ describe("package manifest compatibility", () => {
       ],
     ],
     ["the README", "../README.md", ["Node.js `22.13+` or `23.4+`"], ["OpenCode `>= 1.4.3`"]],
-    ["the pack script", "../scripts/pack-release-package.mjs", [], ["HUSKY", "LEFTHOOK"]],
-    ["the contents check", "../scripts/verify-package-contents.mjs", [], ["HUSKY", "LEFTHOOK"]],
-    ["the release check", "../scripts/verify-release-package.mjs", [], ["HUSKY", "LEFTHOOK"]],
+    ["the pack script", "../.github/scripts/pack-release-package.mjs", [], ["HUSKY", "LEFTHOOK"]],
+    [
+      "the contents check",
+      "../.github/scripts/verify-package-contents.mjs",
+      [],
+      ["HUSKY", "LEFTHOOK"],
+    ],
+    [
+      "the release check",
+      "../.github/scripts/verify-release-package.mjs",
+      [],
+      ["HUSKY", "LEFTHOOK"],
+    ],
     [
       "the packed-package smoke (public imports, CLI, compiled TUI, OpenTelemetry)",
-      "../scripts/smoke-packed-package.mjs",
+      "../.github/scripts/smoke-packed-package.mjs",
       [
         'await import("@slkiser/opencode-quota");',
         'await import("@slkiser/opencode-quota/server");',
@@ -274,7 +284,7 @@ describe("package manifest compatibility", () => {
     ],
     [
       "the real OpenTelemetry smoke fixture",
-      "../scripts/fixtures/smoke-packed-real-otel.mjs",
+      "../.github/scripts/fixtures/smoke-packed-real-otel.mjs",
       [
         "new MeterProvider({ readers: [reader] })",
         "new PeriodicExportingMetricReader",
@@ -360,7 +370,7 @@ describe("package manifest compatibility", () => {
     });
     expect(
       namedStep(smoke, "Smoke exact npm artifact on Node ${{ matrix.node-version }}").run,
-    ).toBe("node scripts/smoke-packed-package.mjs package-artifacts");
+    ).toBe("node .github/scripts/smoke-packed-package.mjs package-artifacts");
   });
 
   it("publishes only a release-tag artifact after both exact-artifact smoke jobs", () => {
@@ -424,7 +434,7 @@ describe("package manifest compatibility", () => {
     expect(namedStep(smoke, "Download exact release artifact").with).toEqual(artifact);
     expect(
       namedStep(smoke, "Smoke exact release artifact on Node ${{ matrix.node-version }}").run,
-    ).toBe("node scripts/smoke-packed-package.mjs package-artifacts");
+    ).toBe("node .github/scripts/smoke-packed-package.mjs package-artifacts");
 
     expect(publish.needs).toEqual(["release-package", "runtime-smoke"]);
     expect(publish.permissions).toEqual({ contents: "read", "id-token": "write" });
@@ -433,7 +443,9 @@ describe("package manifest compatibility", () => {
     const publishStep = namedStep(publish, "Verify and publish exact release artifact");
     expect(publishStep.env).toEqual({ DIST_TAG: "${{ steps.dist-tag.outputs.dist-tag }}" });
     const publishRun = publishStep.run ?? "";
-    expect(publishRun).toContain("node scripts/verify-release-artifact.mjs package-artifacts");
+    expect(publishRun).toContain(
+      "node .github/scripts/verify-release-artifact.mjs package-artifacts",
+    );
     expect(publishRun).toContain(
       'npm publish "./${TARBALLS[0]}" --tag "$DIST_TAG" --access public --provenance --ignore-scripts',
     );

@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vite-plus/test";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
-const scriptPath = fileURLToPath(new URL("../scripts/verify-release-version.mjs", import.meta.url));
+const scriptPath = fileURLToPath(
+  new URL("../.github/scripts/verify-release-version.mjs", import.meta.url),
+);
 const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
   version: string;
 };

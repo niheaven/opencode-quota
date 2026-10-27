@@ -4,8 +4,8 @@ import {
   buildUpstreamPluginIssueBody,
   planUpstreamPluginIssueAction,
   UPSTREAM_PLUGIN_ISSUE_STATE,
-} from "../scripts/lib/upstream-plugin-issues.mjs";
-import { getUpstreamPluginSpec } from "../scripts/lib/upstream-plugin-specs.mjs";
+} from "../.github/scripts/lib/upstream-plugin-issues.mjs";
+import { getUpstreamPluginSpec } from "../.github/scripts/lib/upstream-plugin-specs.mjs";
 
 const spec = getUpstreamPluginSpec("opencode-gemini-auth");
 
@@ -13,7 +13,7 @@ const tracked = {
   npmUrl: "https://www.npmjs.com/package/opencode-gemini-auth/v/1.2.0",
   packageName: "opencode-gemini-auth",
   publishedAt: "2026-03-01T00:00:00.000Z",
-  referenceDir: "scripts/upstream-plugins/opencode-gemini-auth",
+  referenceDir: ".github/scripts/upstream-plugins/opencode-gemini-auth",
   repo: "jenslys/opencode-gemini-auth",
   version: "1.2.0",
 };
@@ -51,7 +51,7 @@ describe("upstream-plugin-issues", () => {
       npmUrl: "https://www.npmjs.com/package/cursor-opencode-provider/v/0.7.3",
       packageName: "cursor-opencode-provider",
       publishedAt: "2026-09-20T10:00:00.000Z",
-      referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+      referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
       repo: "oakimov/cursor-opencode-provider",
       version: "0.7.3",
     };
@@ -66,7 +66,9 @@ describe("upstream-plugin-issues", () => {
     expect(body).toContain("- Plugin: `cursor-opencode-provider`");
     expect(body).toContain("- Package: `cursor-opencode-provider`");
     expect(body).toContain("- Repository: `oakimov/cursor-opencode-provider`");
-    expect(body).toContain("- Reference path: `scripts/upstream-plugins/cursor-opencode-provider`");
+    expect(body).toContain(
+      "- Reference path: `.github/scripts/upstream-plugins/cursor-opencode-provider`",
+    );
   });
 
   it("uses the canonical scoped AGY package and repository in issue details", () => {
@@ -78,7 +80,7 @@ describe("upstream-plugin-issues", () => {
       npmUrl: "https://www.npmjs.com/package/%40anthonyhaussman/opencode-agy-auth/v/1.1.4",
       packageName: "@anthonyhaussman/opencode-agy-auth",
       publishedAt: "2026-07-18T08:36:49.202Z",
-      referenceDir: "scripts/upstream-plugins/opencode-agy-auth",
+      referenceDir: ".github/scripts/upstream-plugins/opencode-agy-auth",
       repo: "anthonyhaussman/opencode-agy-auth",
       version: "1.1.4",
     };
@@ -104,7 +106,7 @@ describe("upstream-plugin-issues", () => {
       npmUrl: "https://www.npmjs.com/package/cursor-opencode-provider/v/0.7.3",
       packageName: "cursor-opencode-provider",
       publishedAt: "2026-09-20T10:00:00.000Z",
-      referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+      referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
       repo: "old-owner/cursor-opencode-provider",
       version: "0.7.3",
     };
@@ -211,7 +213,7 @@ describe("upstream-plugin-issues", () => {
       spec,
       tracked,
     }).replace(
-      "- Reference path: `scripts/upstream-plugins/opencode-gemini-auth`",
+      "- Reference path: `.github/scripts/upstream-plugins/opencode-gemini-auth`",
       "- Reference path: `references/upstream-plugins/opencode-gemini-auth`",
     );
     expect(closedBody).toContain("`references/upstream-plugins/opencode-gemini-auth`");
