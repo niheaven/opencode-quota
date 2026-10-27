@@ -330,6 +330,7 @@ async function resolveNodeShim(
   paths: path.PlatformPath,
   shimFile: string,
   packageName: string,
+  projectFolder: string | null,
 ): Promise<string | null> {
   const packageRoot = paths.join(paths.dirname(shimFile), "node_modules", packageName);
   const shimCommand = paths.basename(shimFile, paths.extname(shimFile)).toLowerCase();
@@ -364,7 +365,13 @@ async function resolveNodeShim(
   const entry = paths.join(packageRoot, relative);
   // A manifest can send its entry outside the package with `..`; keep it inside the package root.
   if (!isPathInside(paths, packageRoot, entry)) return null;
-  return (await isRegularFile(entry)) ? entry : null;
+  if (!(await isRegularFile(entry))) return null;
+  // The package folder may be a junction or the entry a link, so the file node runs is the real one.
+  const real = await realpath(entry).catch(() => null);
+  if (real === null || (projectFolder !== null && isPathInside(paths, projectFolder, real))) {
+    return null;
+  }
+  return real;
 }
 
 /** The node that runs a shim's entry: resolved as `bl` is, so `bl` and node come from one install.
@@ -372,10 +379,17 @@ async function resolveNodeShim(
 async function resolveNodeExecutable(
   paths: path.PlatformPath,
   trusted: readonly string[],
+  projectFolder: string | null,
 ): Promise<string | null> {
   for (const directory of trusted) {
     const candidate = paths.join(directory, "node.exe");
-    if (await isRegularFile(candidate)) return candidate;
+    if (!(await isRegularFile(candidate))) continue;
+    // Checked like `bl`: a trusted folder's node.exe can be a link into the project.
+    const real = await realpath(candidate).catch(() => null);
+    if (real === null || (projectFolder !== null && isPathInside(paths, projectFolder, real))) {
+      return null;
+    }
+    return real;
   }
   return null;
 }
@@ -415,8 +429,9 @@ export async function resolveAlibabaTokenPlanExecutable(params: {
           !SHELL_LAUNCHER_NAMES.has(paths.basename(resolved).toLowerCase()) &&
           !(projectFolder !== null && isPathInside(paths, projectFolder, resolved))
         ) {
-          const entry = await resolveNodeShim(paths, candidate, SHIM_PACKAGE_NAME);
-          const node = entry === null ? null : await resolveNodeExecutable(paths, trusted);
+          const entry = await resolveNodeShim(paths, candidate, SHIM_PACKAGE_NAME, projectFolder);
+          const node =
+            entry === null ? null : await resolveNodeExecutable(paths, trusted, projectFolder);
           if (entry !== null && node !== null) return { ok: true, file: node, args: [entry] };
         }
         sawShellLauncher = true;
@@ -980,8 +995,8 @@ export type AlibabaCredentialMarkers = {
   openapiAccessKeyId: string | null;
 };
 
-/** With no marker there is nothing to key an account on, so the caller keeps those rows in memory
- * only. */
+/** `null` is a read that failed; a reply naming no credential is markers that are all `null`. With
+ * no marker there is nothing to key an account on, so the caller keeps those rows in memory only. */
 function parseAlibabaCredentialMarkers(text: string): AlibabaCredentialMarkers | null {
   let payload: unknown;
   try {
@@ -990,7 +1005,8 @@ function parseAlibabaCredentialMarkers(text: string): AlibabaCredentialMarkers |
     return null;
   }
   const record = asRecord(payload);
-  if (!record) return null;
+  // A failure envelope says nothing about which credentials are set up.
+  if (!record || asRecord(record.error)) return null;
   const consoleRecord = asRecord(record.console);
   const apiKeyRecord = asRecord(record.api_key);
   const openapiRecord = asRecord(record.openapi);
@@ -1000,8 +1016,7 @@ function parseAlibabaCredentialMarkers(text: string): AlibabaCredentialMarkers |
     openapiAccessKeyId:
       (openapiRecord ? nonEmptyString(openapiRecord.access_key_id) : undefined) ?? null,
   };
-  const anyMarker = markers.consoleMasked ?? markers.apiKeyMasked ?? markers.openapiAccessKeyId;
-  return anyMarker === null ? null : markers;
+  return markers;
 }
 
 /** A half whose credential block is absent was never set up, so it is left out entirely: no rows,
@@ -1025,27 +1040,37 @@ const ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS = 60_000;
 let consoleIdentityCache: {
   timestamp: number;
   value: Promise<AlibabaCredentialMarkers | null>;
+  inFlight: boolean;
 } | null = null;
 
 /** The markers `bl auth status` reports, read through the same machinery as the quota commands. One
- * read is reused for ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS and a mid-flight caller joins it; an account
- * change inside `bl` reaches the next refresh, not the store's post-fetch re-check. */
+ * read is reused for ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS and a mid-flight caller joins it. A `fresh`
+ * caller joins only a read still in flight: a fetch's commands read `bl` live, so its markers are
+ * read live too, and the store's post-fetch re-check then reuses them and sees an account change. */
 export async function resolveAlibabaIdentity(options: {
   requestTimeoutMs?: number;
   runtime: AlibabaTokenPlanRuntime;
+  fresh?: boolean;
 }): Promise<AlibabaCredentialMarkers | null> {
   const cached = consoleIdentityCache;
-  if (cached !== null && Date.now() - cached.timestamp < ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS) {
+  if (
+    cached !== null &&
+    (cached.inFlight ||
+      (!options.fresh && Date.now() - cached.timestamp < ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS))
+  ) {
     return await cached.value;
   }
   const reading = loadConsoleIdentity(options);
-  consoleIdentityCache = { timestamp: Date.now(), value: reading };
+  const entry = { timestamp: Date.now(), value: reading, inFlight: true };
+  consoleIdentityCache = entry;
   try {
     return await reading;
   } catch (error) {
     // A rejected read must not stay cached, or every later caller inherits the failure.
-    if (consoleIdentityCache?.value === reading) consoleIdentityCache = null;
+    if (consoleIdentityCache === entry) consoleIdentityCache = null;
     throw error;
+  } finally {
+    entry.inFlight = false;
   }
 }
 
@@ -1088,6 +1113,7 @@ export async function queryAlibabaTokenPlanSeats(options: {
 
   const seats: AlibabaTokenPlanSeat[] = [];
   let itemCount = 0;
+  let more = true;
   // One deadline for the loop: a per-page timeout cannot bound 50 pages, and overrunning the store's
   // budget discards the whole provider fetch, the personal row included.
   const deadline = Date.now() + ALIBABA_TOKEN_PLAN_SEAT_BUDGET_MS;
@@ -1114,12 +1140,14 @@ export async function queryAlibabaTokenPlanSeats(options: {
     seats.push(...page.seats);
     itemCount += page.itemCount;
     // A page that adds no items can never reach Total, and 50 timeouts would exhaust the store's budget.
-    if (page.itemCount === 0) break;
-    const more =
-      page.total === undefined
+    more =
+      page.itemCount > 0 &&
+      (page.total === undefined
         ? page.itemCount >= ALIBABA_TOKEN_PLAN_SEAT_PAGE_SIZE
-        : itemCount < page.total;
+        : itemCount < page.total);
     if (!more) break;
   }
+  // Pages still left at the cap: a roster missing seats is reported as failed, like a timeout.
+  if (more) return fail("seat_command_failed");
   return { ok: true, seats };
 }

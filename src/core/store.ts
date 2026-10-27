@@ -77,6 +77,8 @@ export type ProviderFetch = {
    */
   rowLogins?: string[];
   error?: QuotaError;
+  /** The provider answered that it has nothing to show: the rows are cleared, with no error. */
+  empty?: true;
   debug: DebugDetail[];
   /** Writes this check's part of the export file from its rows as shown and its error. */
   buildExportPart?: (check: CheckForExport) => QuotaExportProvider;
@@ -599,20 +601,22 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     const previous = entries.get(where.key);
     const fresh = loginRows(result);
     const gotRows = fresh.length > 0;
-    const error = result.error ?? (gotRows ? undefined : ({ code: "no_data" } as const));
+    // An answer of nothing replaces the last rows, as an answer with rows does.
+    const replacesRows = gotRows || (result.empty === true && !result.error);
+    const error = result.error ?? (replacesRows ? undefined : ({ code: "no_data" } as const));
     // With an error, the logins that did not answer keep their last rows.
     const answered = new Set(fresh.map((row) => row.login));
     const kept =
       gotRows && result.error
         ? (previous?.rows ?? []).filter((row) => !answered.has(row.login))
         : [];
-    const rows = gotRows ? [...fresh, ...kept] : (previous?.rows ?? []);
+    const rows = replacesRows ? [...fresh, ...kept] : (previous?.rows ?? []);
     const found = gotRows && previous ? findResets(previous, rows, nowMs) : [];
     const notices = joinNotices(
       (previous?.notices ?? []).filter((notice) => nowMs - notice.atMs <= RESET_NOTICE_KEEP_MS),
       found,
     );
-    const okAtMs = gotRows ? nowMs : previous?.okAtMs;
+    const okAtMs = replacesRows ? nowMs : previous?.okAtMs;
     // The check's own rows, numbered among the kept ones as the snapshot numbers them.
     const exportPart = result.buildExportPart?.({
       rows: shownRows(rows).slice(0, fresh.length),
@@ -635,7 +639,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
       debug: result.debug,
       ...(exportPart === undefined ? {} : { exportPart }),
       notices,
-      resetSeenAtMs: gotRows
+      resetSeenAtMs: replacesRows
         ? resetSeenTimes(previous, rows, nowMs)
         : (previous?.resetSeenAtMs ?? {}),
     });

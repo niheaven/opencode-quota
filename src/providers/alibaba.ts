@@ -342,12 +342,12 @@ function createAlibabaProvider(spec: {
       const runtime = { cwd: ctx.workspaceRoot };
       const requestTimeoutMs = alibabaRequestTimeoutMs(ctx);
       // Independent commands with different auth: run them all, and let each report its own failure.
-      // `bl auth status` rides along on the memoised cache identity, so it costs no second spawn.
+      // `bl auth status` is read live beside them, and the store's identity re-check reuses that read.
       const [results, markers] = await Promise.all([
         Promise.all(
           spec.commands.map((command) => runAlibabaCommand(command, { runtime, requestTimeoutMs })),
         ),
-        resolveAlibabaIdentity({ requestTimeoutMs, runtime }),
+        resolveAlibabaIdentity({ requestTimeoutMs, runtime, fresh: true }),
       ]);
       const debug = commandDebug(results);
       const [first] = results;
@@ -373,7 +373,10 @@ function createAlibabaProvider(spec: {
         }
       }
 
-      return { attempted: true, accounts, debug };
+      // Every command answered and none had anything to show, such as the Coding Plan's `{}`: an
+      // answer, so it clears the last rows rather than reading as no data.
+      const empty = accounts.length === 0 && results.every((result) => result.ok);
+      return { attempted: true, accounts, debug, ...(empty ? { empty: true as const } : {}) };
     },
   };
 }

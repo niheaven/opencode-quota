@@ -107,14 +107,20 @@ async function mockExecutable(file = "/trusted/bin/bl", target = file): Promise<
   );
 }
 
-/** Fake win32 filesystem; `path.win32` keys keep these cases runnable on a POSIX runner too. */
-async function mockWin32Files(files: Record<string, string>): Promise<void> {
+/** Fake win32 filesystem; `path.win32` keys keep these cases runnable on a POSIX runner too.
+ * `links` maps a path to the real path a link or junction resolves it to. */
+async function mockWin32Files(
+  files: Record<string, string>,
+  links: Record<string, string> = {},
+): Promise<void> {
   const stats = await stat(process.execPath);
   vi.mocked(stat).mockImplementation(async (candidate) => {
     if (String(candidate) in files) return stats;
     throw new Error("File does not exist");
   });
-  vi.mocked(realpath).mockImplementation(async (candidate) => String(candidate));
+  vi.mocked(realpath).mockImplementation(
+    async (candidate) => links[String(candidate)] ?? String(candidate),
+  );
   vi.mocked(readFile).mockImplementation(async (candidate) => {
     const contents = files[String(candidate)];
     if (contents === undefined) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -574,6 +580,29 @@ describe("alibaba token plan Windows resolution", () => {
     },
   ])("falls back to refusing the shim on $name", async ({ files }) => {
     await mockWin32Files({ [SHIM]: "npm shim text", [NODE]: "node", ...files });
+    expect(
+      await resolveAlibabaTokenPlanExecutable({
+        platform: "win32",
+        cwd: WORKSPACE,
+        homedir: HOME,
+        pathEnv: TRUSTED_BIN,
+      }),
+    ).toEqual(LAUNCHER_ERROR);
+  });
+
+  it.each([
+    { name: "a node.exe that links into the project", link: NODE },
+    { name: "a package entry reached through a junction into the project", link: ENTRY },
+  ])("refuses the shim for $name", async ({ link }) => {
+    await mockWin32Files(
+      {
+        [SHIM]: "npm shim text",
+        [NODE]: "node",
+        [MANIFEST]: manifest({ bl: "dist/bailian.mjs" }),
+        [ENTRY]: "cli",
+      },
+      { [link]: W.join(WORKSPACE, "planted", W.basename(link)) },
+    );
     expect(
       await resolveAlibabaTokenPlanExecutable({
         platform: "win32",
@@ -1476,6 +1505,23 @@ describe("alibaba token plan seat process boundary", () => {
     expect(requests).toHaveLength(2);
   });
 
+  it("reports a failure when seats remain after the last page it may read", async () => {
+    await mockExecutable();
+    const full = Array.from({ length: SEAT_PAGE_SIZE }, (_, index) => seatItem(`seat${index}`));
+    const total = 50 * SEAT_PAGE_SIZE + 1;
+    const { requests, spawn } = pageSpawn(
+      Array.from({ length: 50 }, () => seatEnvelope(full, total)),
+    );
+    const result = await queryAlibabaTokenPlanSeats({
+      runtime: linuxRuntime(spawn),
+    });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "seat_command_failed", message: ERROR_MESSAGES.seat_command_failed },
+    });
+    expect(requests).toHaveLength(50);
+  });
+
   it("gives up when its whole time budget is spent, rather than report a short list", async () => {
     await mockExecutable();
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -1744,8 +1790,20 @@ describe("alibaba token plan credential markers", () => {
     ["a console without masked", { console: { source: "config" } }],
     ["an empty masked", { console: { masked: "   " } }],
     ["a non-string masked", { console: { masked: 42 } }],
+  ])("reads %s as a reply naming no credential, not a failed read", async (_name, payload) => {
+    await mockExecutable();
+    const { spawn } = statusSpawn(JSON.stringify(payload));
+    await expect(resolveAlibabaIdentity({ runtime: runtime(spawn) })).resolves.toEqual({
+      consoleMasked: null,
+      apiKeyMasked: null,
+      openapiAccessKeyId: null,
+    });
+  });
+
+  it.each([
     ["a non-object root", []],
-  ])("falls back to no identity for %s", async (_name, payload) => {
+    ["a failure envelope", { error: { code: 3, message: "not signed in" } }],
+  ])("falls back to a failed read for %s", async (_name, payload) => {
     await mockExecutable();
     const { spawn } = statusSpawn(JSON.stringify(payload));
     await expect(resolveAlibabaIdentity({ runtime: runtime(spawn) })).resolves.toBeNull();
@@ -1804,6 +1862,11 @@ describe("alibaba token plan credential markers", () => {
     [
       "a model-API-key-only account reports neither, since neither command's credential is set up",
       { consoleMasked: null, apiKeyMasked: API_KEY_MASKED, openapiAccessKeyId: null },
+      { console: false, openapi: false },
+    ],
+    [
+      "a reply naming no credential leaves both out, since neither was set up",
+      { consoleMasked: null, apiKeyMasked: null, openapiAccessKeyId: null },
       { console: false, openapi: false },
     ],
     [

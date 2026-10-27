@@ -172,6 +172,8 @@ describe("alibaba-coding-plan provider", () => {
 
     expect(fetched.rows).toEqual([]);
     expect(fetched.error).toBeUndefined();
+    // An answer, not missing data: the store clears a lapsed plan's rows without an error.
+    expect(fetched.empty).toBe(true);
     expect(fetched.debug).toEqual([
       { key: "cli_available", value: "true" },
       PLATFORM,

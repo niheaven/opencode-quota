@@ -586,8 +586,8 @@ describe("alibaba-token-plan provider", () => {
     ]);
   });
 
-  // `bl auth status` is memoised for 60 s while each command runs live, so a marker can lag the
-  // command it describes: a half it calls absent may still have answered with rows.
+  // `bl auth status` runs beside each command, not before it, so a marker can lag the command it
+  // describes: a half it calls absent may still have answered with rows.
   it.runIf(SUPPORTED)(
     "shows the personal window a stale identity read called the console half absent",
     async () => {
@@ -621,33 +621,44 @@ describe("alibaba-token-plan provider", () => {
   );
 
   it.runIf(SUPPORTED)(
-    "still reports both halves when the account names neither credential",
+    "leaves out both halves when the account names neither credential",
     async () => {
-      // A read that failed looks the same to a provider that cannot tell absence from failure.
       installCli({ usage: exits(3), seats: exits(3), auth: replying(AUTH_STATUS.neither) });
 
       const fetched = await fetchTokenPlan();
 
       expect(rowSummary(fetched.rows)).toEqual([]);
-      expect(fetched.error).toMatchObject({ code: "login_expired" });
-      expect(fetched.debug).toEqual([
-        { key: "cli_available", value: "true" },
-        PLATFORM,
-        { key: "failure_kind", value: "not_authenticated" },
-        { key: "seat_failure_kind", value: "seat_not_authenticated" },
-        {
-          key: "error",
-          value: `Alibaba Token Plan (personal): ${ERROR_MESSAGES.not_authenticated}`,
-        },
-        { key: "error_kind", value: "login_expired" },
-        {
-          key: "error",
-          value: `Alibaba Token Plan (team): ${ERROR_MESSAGES.seat_not_authenticated}`,
-        },
-        { key: "error_kind", value: "login_expired" },
-      ]);
+      expect(fetched.error).toBeUndefined();
+      // The failures were left out, not answered, so the store's no-data check stays.
+      expect(fetched.empty).toBeUndefined();
     },
   );
+
+  it.runIf(SUPPORTED)("still reports both halves when the identity read fails", async () => {
+    // A read that failed cannot tell absence from failure.
+    installCli({ usage: exits(3), seats: exits(3), auth: exits(1) });
+
+    const fetched = await fetchTokenPlan();
+
+    expect(rowSummary(fetched.rows)).toEqual([]);
+    expect(fetched.error).toMatchObject({ code: "login_expired" });
+    expect(fetched.debug).toEqual([
+      { key: "cli_available", value: "true" },
+      PLATFORM,
+      { key: "failure_kind", value: "not_authenticated" },
+      { key: "seat_failure_kind", value: "seat_not_authenticated" },
+      {
+        key: "error",
+        value: `Alibaba Token Plan (personal): ${ERROR_MESSAGES.not_authenticated}`,
+      },
+      { key: "error_kind", value: "login_expired" },
+      {
+        key: "error",
+        value: `Alibaba Token Plan (team): ${ERROR_MESSAGES.seat_not_authenticated}`,
+      },
+      { key: "error_kind", value: "login_expired" },
+    ]);
+  });
 
   it.runIf(SUPPORTED)(
     "keys the account on the access key id, so a replaced console token keeps the slot",
@@ -725,6 +736,26 @@ describe("alibaba-token-plan provider", () => {
       await identityPolicy().resolveIdentity(IDENTITY_CONTEXT as never, {} as never);
 
       expect(readFileSync(log, "utf8").trim().split("\n")).toEqual(["auth status"]);
+    },
+  );
+
+  it.runIf(SUPPORTED)(
+    "reads the account again for a fetch, so the store's re-check sees a switch inside the memo",
+    async () => {
+      installCli({ auth: replying(AUTH_STATUS.both) });
+      await identityPolicy().resolveIdentity(IDENTITY_CONTEXT as never, {} as never);
+      const other = { ...AUTH_STATUS.both, openapi: { access_key_id: "other" } };
+      installCli({ auth: replying(other) });
+      identityMocks.deriveIdentity.mockClear();
+
+      // The commands read the switched account live; the re-check after them must too.
+      await fetchTokenPlan();
+      await identityPolicy().resolveIdentity(IDENTITY_CONTEXT as never, {} as never);
+
+      expect(identityMocks.deriveIdentity).toHaveBeenCalledWith({
+        providerId: "alibaba-token-plan",
+        principal: { kind: "stable-id", value: "other" },
+      });
     },
   );
 
