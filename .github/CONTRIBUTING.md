@@ -84,5 +84,6 @@ Every PR that changes what users see must include before-and-after screenshots t
 - [ ] Tested on the current released OpenCode; version noted
 - [ ] Before-and-after screenshots and surface results, or `Not applicable`
 - [ ] Docs updated if commands, config, or workflow changed (usually `README.md`)
+  Update the English docs only; the maintainer updates the translations in `docs/readme/i18n/`.
 - [ ] New built-in provider: models.dev link, two independent requests, why custom isn't enough
 - [ ] New API-key/token provider: started from the provider template, or explained why not
