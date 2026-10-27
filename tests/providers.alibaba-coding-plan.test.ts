@@ -181,7 +181,7 @@ describe("alibaba-coding-plan provider", () => {
     ]);
   });
 
-  it.runIf(SUPPORTED)("runs the Coding Plan command beside the shared identity read", async () => {
+  it.runIf(SUPPORTED)("runs the Coding Plan command, then the shared identity read", async () => {
     installCli({ codingPlan: replying(USAGE) });
 
     await fetchCodingPlan();

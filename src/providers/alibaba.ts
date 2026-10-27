@@ -342,13 +342,12 @@ function createAlibabaProvider(spec: {
       const runtime = { cwd: ctx.workspaceRoot };
       const requestTimeoutMs = alibabaRequestTimeoutMs(ctx);
       // Independent commands with different auth: run them all, and let each report its own failure.
-      // `bl auth status` is read live beside them, and the store's identity re-check reuses that read.
-      const [results, markers] = await Promise.all([
-        Promise.all(
-          spec.commands.map((command) => runAlibabaCommand(command, { runtime, requestTimeoutMs })),
-        ),
-        resolveAlibabaIdentity({ requestTimeoutMs, runtime, fresh: true }),
-      ]);
+      const results = await Promise.all(
+        spec.commands.map((command) => runAlibabaCommand(command, { runtime, requestTimeoutMs })),
+      );
+      // Read after the commands, so an account switched while they ran shows in the store's identity
+      // re-check, which reuses this read.
+      const markers = await resolveAlibabaIdentity({ requestTimeoutMs, runtime, fresh: true });
       const debug = commandDebug(results);
       const [first] = results;
       if (!first) return { attempted: false, accounts: [], debug };

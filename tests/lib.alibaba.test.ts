@@ -613,6 +613,27 @@ describe("alibaba token plan Windows resolution", () => {
     ).toEqual(LAUNCHER_ERROR);
   });
 
+  it("refuses an entry inside the project when the cwd names the project through a junction", async () => {
+    const alias = W.join("C:\\", "alias");
+    await mockWin32Files(
+      {
+        [SHIM]: "npm shim text",
+        [NODE]: "node",
+        [MANIFEST]: manifest({ bl: "dist/bailian.mjs" }),
+        [ENTRY]: "cli",
+      },
+      { [alias]: WORKSPACE, [ENTRY]: W.join(WORKSPACE, "evil.mjs") },
+    );
+    expect(
+      await resolveAlibabaTokenPlanExecutable({
+        platform: "win32",
+        cwd: alias,
+        homedir: HOME,
+        pathEnv: TRUSTED_BIN,
+      }),
+    ).toEqual(LAUNCHER_ERROR);
+  });
+
   it("refuses the shim when no node is on the trusted PATH", async () => {
     await mockWin32Files({
       [SHIM]: "npm shim text",

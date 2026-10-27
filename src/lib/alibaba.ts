@@ -279,30 +279,39 @@ function stripPathQuotes(value: string): string {
   return trimmed;
 }
 
-/** The folder whose PATH entries and executables are not trusted: the project folder quota is
- * computed for. The home folder is not a project, so it gives none. */
-function untrustedProjectFolder(
+/** The folders whose PATH entries and executables are not trusted: the project folder quota is
+ * computed for, as given and with its links resolved, since a junction or symlink can name it under
+ * another path. The home folder is not a project, so it gives none. */
+async function untrustedProjectFolders(
   paths: path.PlatformPath,
   cwd: string,
   home: string | undefined,
-): string | null {
+): Promise<string[]> {
   const resolved = paths.resolve(cwd);
-  return resolved === paths.resolve(home ?? homedir()) ? null : resolved;
+  if (resolved === paths.resolve(home ?? homedir())) return [];
+  const real = await realpath(resolved).catch(() => resolved);
+  return real === resolved ? [resolved] : [resolved, real];
+}
+
+function isInsideProject(
+  paths: path.PlatformPath,
+  projectFolders: readonly string[],
+  candidate: string,
+): boolean {
+  return projectFolders.some((folder) => isPathInside(paths, folder, candidate));
 }
 
 function listTrustedPathDirectories(
   paths: path.PlatformPath,
   pathEnv: string | undefined,
-  cwd: string,
-  home: string | undefined,
+  projectFolders: readonly string[],
 ): string[] {
-  const projectFolder = untrustedProjectFolder(paths, cwd, home);
   const trusted = new Set<string>();
   for (const rawEntry of (pathEnv ?? "").split(paths.delimiter)) {
     const entry = stripPathQuotes(rawEntry);
     if (!paths.isAbsolute(entry)) continue;
     const resolved = paths.resolve(entry);
-    if (projectFolder !== null && isPathInside(paths, projectFolder, resolved)) continue;
+    if (isInsideProject(paths, projectFolders, resolved)) continue;
     trusted.add(resolved);
   }
   return [...trusted];
@@ -330,7 +339,7 @@ async function resolveNodeShim(
   paths: path.PlatformPath,
   shimFile: string,
   packageName: string,
-  projectFolder: string | null,
+  projectFolders: readonly string[],
 ): Promise<string | null> {
   const packageRoot = paths.join(paths.dirname(shimFile), "node_modules", packageName);
   const shimCommand = paths.basename(shimFile, paths.extname(shimFile)).toLowerCase();
@@ -368,9 +377,7 @@ async function resolveNodeShim(
   if (!(await isRegularFile(entry))) return null;
   // The package folder may be a junction or the entry a link, so the file node runs is the real one.
   const real = await realpath(entry).catch(() => null);
-  if (real === null || (projectFolder !== null && isPathInside(paths, projectFolder, real))) {
-    return null;
-  }
+  if (real === null || isInsideProject(paths, projectFolders, real)) return null;
   return real;
 }
 
@@ -379,16 +386,14 @@ async function resolveNodeShim(
 async function resolveNodeExecutable(
   paths: path.PlatformPath,
   trusted: readonly string[],
-  projectFolder: string | null,
+  projectFolders: readonly string[],
 ): Promise<string | null> {
   for (const directory of trusted) {
     const candidate = paths.join(directory, "node.exe");
     if (!(await isRegularFile(candidate))) continue;
     // Checked like `bl`: a trusted folder's node.exe can be a link into the project.
     const real = await realpath(candidate).catch(() => null);
-    if (real === null || (projectFolder !== null && isPathInside(paths, projectFolder, real))) {
-      return null;
-    }
+    if (real === null || isInsideProject(paths, projectFolders, real)) return null;
     return real;
   }
   return null;
@@ -406,12 +411,11 @@ export async function resolveAlibabaTokenPlanExecutable(params: {
   }
 
   const paths = pathModuleFor(platform);
-  const projectFolder = untrustedProjectFolder(paths, params.cwd, params.homedir);
+  const projectFolders = await untrustedProjectFolders(paths, params.cwd, params.homedir);
   const trusted = listTrustedPathDirectories(
     paths,
     params.pathEnv ?? process.env.PATH,
-    params.cwd,
-    params.homedir,
+    projectFolders,
   );
   let sawShellLauncher = false;
   for (const directory of trusted) {
@@ -427,17 +431,17 @@ export async function resolveAlibabaTokenPlanExecutable(params: {
           platform === "win32" &&
           paths.extname(candidate).toLowerCase() === SHIM_EXTENSION &&
           !SHELL_LAUNCHER_NAMES.has(paths.basename(resolved).toLowerCase()) &&
-          !(projectFolder !== null && isPathInside(paths, projectFolder, resolved))
+          !isInsideProject(paths, projectFolders, resolved)
         ) {
-          const entry = await resolveNodeShim(paths, candidate, SHIM_PACKAGE_NAME, projectFolder);
+          const entry = await resolveNodeShim(paths, candidate, SHIM_PACKAGE_NAME, projectFolders);
           const node =
-            entry === null ? null : await resolveNodeExecutable(paths, trusted, projectFolder);
+            entry === null ? null : await resolveNodeExecutable(paths, trusted, projectFolders);
           if (entry !== null && node !== null) return { ok: true, file: node, args: [entry] };
         }
         sawShellLauncher = true;
         continue;
       }
-      if (projectFolder !== null && isPathInside(paths, projectFolder, resolved)) {
+      if (isInsideProject(paths, projectFolders, resolved)) {
         return fail("workspace_path_rejected");
       }
       return { ok: true, file: resolved };
@@ -923,7 +927,7 @@ async function resolveAlibabaTokenPlanInvocation(
     cwd: processCwd,
     env: envWithTrustedPath(
       runtime.env ?? process.env,
-      listTrustedPathDirectories(paths, pathEnv, cwd, home),
+      listTrustedPathDirectories(paths, pathEnv, await untrustedProjectFolders(paths, cwd, home)),
       paths,
     ),
     spawn: runtime.spawn ?? runAlibabaTokenPlanProcess,
@@ -1045,8 +1049,8 @@ let consoleIdentityCache: {
 
 /** The markers `bl auth status` reports, read through the same machinery as the quota commands. One
  * read is reused for ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS and a mid-flight caller joins it. A `fresh`
- * caller joins only a read still in flight: a fetch's commands read `bl` live, so its markers are
- * read live too, and the store's post-fetch re-check then reuses them and sees an account change. */
+ * caller joins nothing and starts its own read: a fetch reads its markers after its commands, so an
+ * earlier read cannot hide a switch made while they ran, and the store's re-check reuses them. */
 export async function resolveAlibabaIdentity(options: {
   requestTimeoutMs?: number;
   runtime: AlibabaTokenPlanRuntime;
@@ -1055,8 +1059,8 @@ export async function resolveAlibabaIdentity(options: {
   const cached = consoleIdentityCache;
   if (
     cached !== null &&
-    (cached.inFlight ||
-      (!options.fresh && Date.now() - cached.timestamp < ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS))
+    !options.fresh &&
+    (cached.inFlight || Date.now() - cached.timestamp < ALIBABA_TOKEN_PLAN_IDENTITY_TTL_MS)
   ) {
     return await cached.value;
   }

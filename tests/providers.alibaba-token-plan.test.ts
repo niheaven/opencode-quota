@@ -586,7 +586,7 @@ describe("alibaba-token-plan provider", () => {
     ]);
   });
 
-  // `bl auth status` runs beside each command, not before it, so a marker can lag the command it
+  // `bl auth status` runs after the commands, so a marker can disagree with the command it
   // describes: a half it calls absent may still have answered with rows.
   it.runIf(SUPPORTED)(
     "shows the personal window a stale identity read called the console half absent",
@@ -756,6 +756,22 @@ describe("alibaba-token-plan provider", () => {
         providerId: "alibaba-token-plan",
         principal: { kind: "stable-id", value: "other" },
       });
+    },
+  );
+
+  it.runIf(SUPPORTED)(
+    "reads the account after the commands, never joining a read started before them",
+    async () => {
+      const log = join(paths.root, "auth-status.log");
+      installCli({ auth: replying(AUTH_STATUS.both, log) });
+
+      // A read still in flight from before the fetch cannot see a switch made while the seats load.
+      const earlier = identityPolicy().resolveIdentity(IDENTITY_CONTEXT as never, {} as never);
+      await fetchTokenPlan();
+      await earlier;
+
+      expect(readFileSync(log, "utf8").trim().split("\n")).toEqual(["auth status", "auth status"]);
+      expect(launch.calls.at(-1)?.args.join(" ")).toBe("auth status --output json");
     },
   );
 
