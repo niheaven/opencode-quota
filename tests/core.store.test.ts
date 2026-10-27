@@ -329,6 +329,20 @@ describe("quota store", () => {
     expect(only(snapshot)).not.toHaveProperty("okAtMs");
   });
 
+  it("clears the last rows without an error when the provider answers it has nothing", async () => {
+    const copilot = fakeProvider();
+    const store = makeStore([copilot.provider], 0);
+    await store.refresh({ reason: "manual" });
+    clock += MINUTE;
+    copilot.fetch.mockResolvedValue({ rows: [], empty: true, debug: [] });
+
+    const snapshot = await store.refresh({ reason: "manual" });
+
+    expect(only(snapshot).rows).toEqual([]);
+    expect(only(snapshot)).not.toHaveProperty("error");
+    expect(only(snapshot).okAtMs).toBe(clock);
+  });
+
   it("shows rows only to the account that fetched them", async () => {
     const copilot = fakeProvider();
     const store = makeStore([copilot.provider]);

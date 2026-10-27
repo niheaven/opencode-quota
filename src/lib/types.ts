@@ -13,8 +13,6 @@ export type GeminiCliAuthSourceKey =
   | "google";
 export type GoogleAgyAuthSourceKey = "google-agy" | "opencode-agy-auth" | "google-agy-auth";
 
-export type AlibabaCodingPlanTier = "lite" | "pro";
-
 /**
  * Copilot subscription tier.
  * See: https://docs.github.com/en/copilot/get-started/plans

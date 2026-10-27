@@ -13,7 +13,7 @@ import { isRecord } from "../lib/json-guards.js";
 import { normalizeQuotaProviderId, QUOTA_PROVIDER_CATALOG } from "../lib/provider-metadata.js";
 import {
   describeQuotaProviderRequest,
-  isMaintainedQuotaProviderTuning,
+  isRetiredEstimateTuning,
   QUOTA_PROVIDERS_AGGREGATE_ID,
   type QuotaProviderDefinition,
   validateQuotaProviders,
@@ -659,7 +659,7 @@ export type ClientSettings = {
   fromFile: string[];
   /** The ids `providers.off` takes, with their names. */
   providers: Array<{ id: string; label: string }>;
-  /** The custom providers in settings.jsonc, without the maintained tunings. */
+  /** The custom providers in settings.jsonc, without the retired estimate's leftover tuning. */
   custom: CustomProviderSwitch[];
 };
 
@@ -688,7 +688,7 @@ export function clientSettings({
         : QUOTA_PROVIDER_CATALOG[id as keyof typeof QUOTA_PROVIDER_CATALOG].label,
   }));
   const custom = settings.providers.custom
-    .filter((definition) => !isMaintainedQuotaProviderTuning(definition))
+    .filter((definition) => !isRetiredEstimateTuning(definition))
     .map((definition) => ({
       id: definition.id,
       label: definition.label,

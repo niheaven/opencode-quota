@@ -105,12 +105,29 @@ Run `/quota_status` first. Every known provider has a section named after its id
 </details>
 
 <details>
-<summary><strong>Alibaba Personal Token Plan</strong></summary>
+<summary><strong>Alibaba Coding Plan</strong></summary>
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
-| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder (for example `/opt/homebrew/bin`, `~/.local/bin`, or an nvm folder). On Windows, use WSL. See [setup](providers.md#alibaba-personal-token-plan). |
-| Console session expired | Run `bl auth login --console`. A Coding Plan API key cannot sign in to this provider. |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with the `node` on that `PATH`. See [setup](providers.md#alibaba-coding-plan). |
+| Console session missing | The Coding Plan is read through the console session: run `bl auth login --console`. |
+| No rows and no error    | The account has no Coding Plan subscription: the CLI prints `{}`, and OpenCode Quota then shows no rows, which is not a failure. |
+| Provider not detected   | Make sure the requests use OpenCode's `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `alibaba`, or `alibaba-cn` provider. |
+
+</details>
+
+<details>
+<summary><strong>Alibaba Token Plan</strong></summary>
+
+| Symptom                 | Fix |
+| ----------------------- | --- |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with the `node` on that `PATH`. See [setup](providers.md#alibaba-token-plan). |
+| Console session expired | The personal `Monthly` row needs the console session: run `bl auth login --console`. An AK/SK covers the team seats only. |
+| Team seats show no rows | Team seats need API Key (AK/SK) credentials: run `bl auth login --open-api`, or set `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`. A released seat has no row by design. |
+| The wrong plan          | The command carries no region or account: you see the plan `bl` is signed in to. `bl auth status` reports which account, region and site that is. |
+| No monthly row          | `bl` reported no monthly percentage, so the plan may be unlimited — or the subscription has expired, which prints the same reply. Check it in the Bailian Token Plan console. |
+| Old `bl`, nothing shown | `bailian-cli` 2.2.0 replaced the five-hour and weekly windows with one monthly window; older builds report only the removed ones. Upgrade with `npm install -g bailian-cli`. |
+| JSON export empty       | `show --json` is cache-only, so the export fills after a live check instead of running `bl`. |
 
 </details>
 

@@ -39,11 +39,14 @@ describe("provider cache policies", () => {
       kind: "account-neutral",
     });
 
+    expect(PROVIDER_CACHE_POLICIES["alibaba-token-plan"]?.kind).toBe("resolved-auth");
+    expect(PROVIDER_CACHE_POLICIES["alibaba-coding-plan"]?.kind).toBe("resolved-auth");
+
     const uncached = Object.entries(PROVIDER_CACHE_POLICIES)
       .filter(([, policy]) => policy.kind === "uncached")
       .map(([id]) => id)
       .sort();
-    expect(uncached).toEqual(["alibaba-token-plan", "cursor"]);
+    expect(uncached).toEqual(["cursor"]);
   });
 
   it("keeps Kimi identities isolated through the actual regional policy resolvers", async () => {

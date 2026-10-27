@@ -57,8 +57,8 @@ These tables show which plans a vendor sells. Except for Copilot organization/en
 
 | Provider                      | Auth/setup                                                          | Data from      | Reports            |
 | ----------------------------- | ------------------------------------------------------------------- | -------------- | ------------------ |
-| Alibaba Coding Plan           | Automatic                                                           | Local estimate | Quota              |
-| Alibaba Personal Token Plan   | [Needs setup](#alibaba-personal-token-plan)                         | Official CLI   | Quota              |
+| Alibaba Coding Plan           | [Needs setup](#alibaba-coding-plan)                                 | Official CLI   | Quota              |
+| Alibaba Token Plan            | [Needs setup](#alibaba-token-plan)                                  | Official CLI   | Quota and credits  |
 | DeepSeek                      | Automatic                                                           | Remote API     | Balance and status |
 | Kimi Code                     | Automatic                                                           | Remote API     | Quota              |
 | Kimi Code (CN)                | Automatic                                                           | Remote API     | Quota              |
@@ -73,15 +73,16 @@ These tables show which plans a vendor sells. Except for Copilot organization/en
 <details>
 <summary><strong>Business / Team</strong></summary>
 
-| Provider                 | Auth/setup | Data from  | Reports |
-| ------------------------ | ---------- | ---------- | ------- |
-| Kimi Code                | Automatic  | Remote API | Quota   |
-| Kimi Code (CN)           | Automatic  | Remote API | Quota   |
-| MiniMax Token Plan       | Automatic  | Remote API | Quota   |
-| MiniMax Token Plan (CN)  | Automatic  | Remote API | Quota   |
-| Zhipu Coding Plan        | Automatic  | Remote API | Quota   |
+| Provider                 | Auth/setup                         | Data from    | Reports |
+| ------------------------ | ---------------------------------- | ------------ | ------- |
+| Alibaba Token Plan       | [Needs setup](#alibaba-token-plan) | Official CLI | Credits |
+| Kimi Code                | Automatic                          | Remote API   | Quota   |
+| Kimi Code (CN)           | Automatic                          | Remote API   | Quota   |
+| MiniMax Token Plan       | Automatic                          | Remote API   | Quota   |
+| MiniMax Token Plan (CN)  | Automatic                          | Remote API   | Quota   |
+| Zhipu Coding Plan        | Automatic                          | Remote API   | Quota   |
 
-These show only your own member API key's usage, not the whole organization's.
+Except for Alibaba Token Plan, which reports one Credits row per team seat, these show only your own member API key's usage, not the whole organization's.
 
 </details>
 
@@ -104,7 +105,7 @@ To write one yourself, add it to `providers.custom` in `settings.jsonc` ([where]
 - **Local estimate prices:** the automatic match comes first (models.dev, and Cursor's own prices for Auto, Composer and Grok); `pricingModelMap` is used only where it finds none and cannot override a successful automatic match. If any request cannot be priced, the request counts stay and the budget percentage is reported unavailable.
 - **Not accepted:** scripts, methods, custom headers, templates, executable mappings, regular expressions, JSONPath, and automatic endpoint discovery.
 - A custom model provider still needs its normal OpenCode provider/model config. `/connect` → **Other** stores its credential, not its model setup.
-- OpenRouter is built in; a custom OpenRouter definition only helps for a different endpoint or label. Alibaba Personal Token Plan's `alibaba-token-plan` id is reserved. The `alibaba-coding-plan` id tunes the built-in Alibaba Coding Plan estimate and needs its five-hour, weekly and monthly rolling windows, in that order.
+- OpenRouter is built in; a custom OpenRouter definition only helps for a different endpoint or label. Alibaba Token Plan uses the reserved `alibaba-token-plan` id and stays a separate official-CLI provider; `alibaba-token-plan-cn` is another name for the same CLI.
 
 <details>
 <summary><strong>Example: a remote API and a local estimate</strong></summary>
@@ -295,7 +296,6 @@ These providers read an API key from, in order: an environment variable, then `p
 
 | Provider                | Environment variables (first match wins)              | Notes |
 | ----------------------- | ----------------------------------------------------- | ----- |
-| Alibaba Coding Plan     | `ALIBABA_CODING_PLAN_API_KEY`, `ALIBABA_API_KEY`       | |
 | DeepSeek                | `DEEPSEEK_API_KEY`                                     | See [DeepSeek](#deepseek). |
 | Kimi Code / Kimi Code (CN) | See [Kimi Code](#kimi-code)                         | Each region has its own keys. |
 | MiniMax Token Plan      | `MINIMAX_CODING_PLAN_API_KEY`, `MINIMAX_API_KEY`       | International endpoint. Runtime/config ids like `minimax` and `minimax-coding-plan` use this provider. |
@@ -390,22 +390,46 @@ Cursor estimates the current billing cycle from your local OpenCode history, pri
 - With every request priced and a **Plan** or **Included API budget** set under Cursor on the Providers tab, it shows an **API budget** percentage; without one, **API spend**. With any unpriced request, it shows only **Known API spend**, never a percentage or a total.
 - **Billing day** sets the cycle's first day; unset, the cycle is the local calendar month.
 
-<a id="alibaba-personal-token-plan"></a>
+<a id="alibaba-coding-plan"></a>
 
-### Alibaba Personal Token Plan
+### Alibaba Coding Plan
 
-This is separate from Alibaba Coding Plan. Install and sign in to Alibaba Cloud Model Studio's official CLI yourself:
+The Coding Plan is a separate subscription, read by the same Alibaba Cloud Model Studio CLI and the same console session as the Alibaba Token Plan.
 
 ```bash
 npm install -g bailian-cli
 bl auth login --console
 ```
 
-- OpenCode Quota runs only `bl usage token-plan --output json`. It never installs `bl`, opens a login, reads console cookies, or runs a custom command.
-- On macOS and Linux, `bl` must be in an absolute folder on the `PATH` (the OpenCode service's inside OpenCode, your shell's in the terminal). Relative entries are ignored, and so is anything inside the project folder, including a `bl` that links into it. Your home folder is not a project, so `~/.local/bin` and nvm folders work.
-- On Windows, use WSL. Native `bl.exe` and `.cmd` shims are not supported.
-- Team plans, China-only `alibaba-token-plan-cn` runtimes, and cookie-based console scraping are not supported.
-- After switching the CLI's console account, restart OpenCode or wait for the next live check.
+- It runs `bl usage coding-plan --output json`, which needs the console session.
+- It reports three request windows: `5h`, `Weekly` and `Monthly`, keyed `five_hour`, `weekly` and `monthly`. The quota is **requests**, so a row shows requests used, the limit and the reset time.
+- The plan tier comes from the reply (`instanceType`, for example `pro`) and names the account, such as `Alibaba Coding Plan (Pro)`.
+- An account without a Coding Plan subscription prints `{}`: no rows and no error.
+- It answers to `alibaba-coding-plan` and to the aliases `alibaba` and `alibaba-coding-plan-cn`. `providers.off` resolves synonyms, so `providers.off: ["alibaba"]` switches the Coding Plan off, not the Token Plan.
+- OpenCode Quota never installs `bl`, opens a login, reads console cookies, or runs a custom command.
+
+<a id="alibaba-token-plan"></a>
+
+### Alibaba Token Plan
+
+This is separate from Alibaba Coding Plan, and read by the same `bl` CLI:
+
+```bash
+npm install -g bailian-cli
+bl auth login --console
+```
+
+OpenCode Quota runs two commands, each with its own sign-in. They are independent: setting up one still runs the other, and a half that was never set up reports nothing at all.
+
+- **Personal** (the `Monthly` row, `alibaba-token-plan.personal`) runs `bl usage token-plan --output json` and needs a **console** session.
+- It reports the percent of the monthly plan still left, and its reset time when `bl` gives one. A reply with no percentage leaves the row out; `/quota_status` says so in `window_hint`.
+- **Team seats** (one `Credits` row per seat, `alibaba-token-plan.team.<slug>`) run `bl token-plan list-seats --status NORMAL --query-assigned true --page-size 100 --output json` and need **API Key** (AK/SK) credentials: `bl auth login --open-api`, or `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`. Each seat shows the credits left in its billing cycle, out of the cycle total.
+- Without the AK/SK no team row is reported; the personal row still is. A seat whose status is not `NORMAL` has no row by design.
+- Neither command carries a region or account, so you see the plan `bl` is signed in to. `bl auth status` says which account, region and site that is.
+- One id reports it: `alibaba-token-plan`, and `alibaba-token-plan-cn` is another name for the same CLI, so a config that names it keeps working for provider selection and for `providers.off`.
+- Its rows are saved and shared between OpenCode windows, keyed to the account the CLI reports.
+- `bl` must be in an absolute folder on the [service `PATH`](troubleshooting.md#service-environment). A native `bl` runs directly, npm's `bl.cmd` shim is run with the `node` on that `PATH`, and other launchers are refused.
+- Cookie-based console scraping is not supported. After switching the CLI's console account, restart OpenCode or wait for the next live check.
 
 OpenCode Quota's Google integrations use independent community companion plugins. They are not endorsed by Google.
 

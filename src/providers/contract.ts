@@ -26,11 +26,13 @@ export type AccountResult = {
   errors: FetchError[];
 };
 
-/** `attempted` is false when the provider had nothing to query (it is not set up). */
+/** `attempted` is false when the provider had nothing to query (it is not set up). `empty` is an
+ * answer that there is nothing to show: it clears the last rows without an error. */
 export type ProviderFetchResult = {
   attempted: boolean;
   accounts: AccountResult[];
   debug: DebugDetail[];
+  empty?: true;
 };
 
 /** A row key part from provider text: lower case, `_` for anything else ("Claude/GPT" → "claude_gpt"). */

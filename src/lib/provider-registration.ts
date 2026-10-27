@@ -72,21 +72,19 @@ export const QUOTA_PROVIDER_REGISTRATION_SOURCE = [
   {
     id: "alibaba-coding-plan",
     label: "Alibaba Coding Plan",
-    runtimeIds: ["alibaba-coding-plan"],
-    synonyms: ["alibaba"],
-    liveLocalUsage: true,
+    // OpenCode reaches Alibaba's models under the bare ids, so those belong to the Coding Plan.
+    runtimeIds: ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba", "alibaba-cn"],
+    synonyms: ["alibaba", "alibaba-coding-plan-cn"],
     rowKeys: ["five_hour", "weekly", "monthly"],
-    apiKey: {
-      envVars: ["ALIBABA_CODING_PLAN_API_KEY", "ALIBABA_API_KEY"],
-      providerKeys: ["alibaba-coding-plan", "alibaba"],
-    },
   },
   {
     id: "alibaba-token-plan",
-    label: "Alibaba Personal Token Plan",
-    runtimeIds: ["alibaba-token-plan"],
-    synonyms: [],
-    rowKeys: ["five_hour", "weekly"],
+    label: "Alibaba Token Plan",
+    // One account, two spellings: the CLI's endpoint comes from its own config, so nothing here can
+    // tell a "CN" sign-in from any other.
+    runtimeIds: ["alibaba-token-plan", "alibaba-token-plan-cn"],
+    synonyms: ["alibaba-token-plan-cn"],
+    rowKeys: ["personal", "team.*"],
   },
   {
     id: "google-gemini-cli",

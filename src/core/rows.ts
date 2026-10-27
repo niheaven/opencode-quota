@@ -135,5 +135,6 @@ export function rowsFromProviderResult(
   if (!result.attempted && rows.length === 0) {
     return { rows: [], error: { code: "not_configured" }, debug };
   }
+  if (result.empty && rows.length === 0) return { rows: [], empty: true, debug };
   return { rows, ...logins, debug };
 }

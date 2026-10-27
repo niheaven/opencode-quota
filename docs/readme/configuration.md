@@ -118,7 +118,7 @@ Every place follows these, so in the TUI they are on **Layout → All places**. 
 | `providers.cursor.billingCycleStartDay` | `null` | The day of the month your Cursor bill renews, 1–28. Unset uses the calendar month. |
 | `providers.opencode.monthlyLimitUsd` | `null` | Positive monthly USD amount, used instead of the Console's budget or credit limit. |
 | `providers.checking.minIntervalMs` | `300000` | Positive milliseconds between provider checks. |
-| `providers.checking.requestTimeoutMs` | unset | Positive milliseconds, for every provider. Unset, each uses its own: `5000`, except OpenCode Zen and Xiaomi MiMo `10000`, and Google AGY and Gemini CLI `8000` to sign in and `6000` for the quota. xAI's plan-label lookup waits at most `2000`. |
+| `providers.checking.requestTimeoutMs` | unset | Positive milliseconds, for every provider. Unset, each uses its own: `5000`, except OpenCode Zen and Xiaomi MiMo `10000`, the Alibaba Coding Plan and Token Plan `10000` for the local CLI they run, and Google AGY and Gemini CLI `8000` to sign in and `6000` for the quota. xAI's plan-label lookup waits at most `2000`. |
 | `providers.checking.waitForQuotaReset` | `true` | On a model limit error, wait until 1 minute after the earliest used-up window resets, at most 5 hours. `false` keeps normal retry timing. |
 | `providers.pricing.source` | `"auto"` | `auto`, `bundled`, `runtime`. |
 | `providers.pricing.autoRefreshDays` | `7` | Whole number of days, at least 1. |

@@ -104,8 +104,8 @@ Log in with `/connect` and the provider shows up. Switch providers on or off in 
 
 | Chinese | Plans |
 | --- | --- |
-| Alibaba Coding Plan | Personal |
-| [Alibaba Personal Token Plan](docs/readme/providers.md#alibaba-personal-token-plan)\* | Personal |
+| [Alibaba Coding Plan](docs/readme/providers.md#alibaba-coding-plan)\* | Personal |
+| [Alibaba Token Plan](docs/readme/providers.md#alibaba-token-plan)\* | Personal · Business |
 | DeepSeek | Personal |
 | Kimi Code | Personal · Business |
 | Kimi Code (CN) | Personal · Business |
@@ -121,7 +121,7 @@ Log in with `/connect` and the provider shows up. Switch providers on or off in 
 
 \* Linked names need one more step; the rest work once you log in. [What each one reports](docs/readme/providers.md#pre-configured-providers).
 
-OpenAI ChatGPT quota needs a Codex login ([how](docs/readme/providers.md#openai-and-xai)). Gemini CLI works only with Gemini Code Assist Standard or Enterprise (organization) accounts. Personal Google users should use Google AGY. Business plans of the Chinese providers show only your own member API key's usage. API keys come from OpenCode or an [environment variable](docs/readme/providers.md#api-keys).
+OpenAI ChatGPT quota needs a Codex login ([how](docs/readme/providers.md#openai-and-xai)). Gemini CLI works only with Gemini Code Assist Standard or Enterprise (organization) accounts. Personal Google users should use Google AGY. Business plans of the Chinese providers show only your own member API key's usage, except Alibaba Token Plan, which reports one Credits row per team seat. API keys come from OpenCode or an [environment variable](docs/readme/providers.md#api-keys).
 
 ### Custom providers
 
