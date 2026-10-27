@@ -441,6 +441,7 @@ describe("alibaba token plan Windows resolution", () => {
   const MANIFEST = W.join(PACKAGE_ROOT, "package.json");
   const ENTRY = W.join(PACKAGE_ROOT, "dist", "bailian.mjs");
   const SHIM = W.join(TRUSTED_BIN, "bl.cmd");
+  const NODE = W.join(TRUSTED_BIN, "node.exe");
   const SHIM_ARGS = [ENTRY, ...BL_ARGS];
 
   function manifest(bin: unknown): string {
@@ -509,7 +510,12 @@ describe("alibaba token plan Windows resolution", () => {
     { name: "an object naming only bl", bin: { bl: "dist/bailian.mjs" } },
     { name: "a plain string bin", bin: "dist/bailian.mjs" },
   ])("resolves the npm bl.cmd shim ($name) to the package entry through node", async ({ bin }) => {
-    await mockWin32Files({ [SHIM]: "npm shim text", [MANIFEST]: manifest(bin), [ENTRY]: "cli" });
+    await mockWin32Files({
+      [SHIM]: "npm shim text",
+      [NODE]: "node",
+      [MANIFEST]: manifest(bin),
+      [ENTRY]: "cli",
+    });
     expect(
       await resolveAlibabaTokenPlanExecutable({
         platform: "win32",
@@ -517,12 +523,13 @@ describe("alibaba token plan Windows resolution", () => {
         homedir: HOME,
         pathEnv: TRUSTED_BIN,
       }),
-    ).toEqual({ ok: true, file: process.execPath, args: SHIM_ARGS });
+    ).toEqual({ ok: true, file: NODE, args: [ENTRY] });
   });
 
   it("runs the resolved shim entry with the fixed argv, no shell, and ignored stdin", async () => {
     await mockWin32Files({
       [SHIM]: "npm shim text",
+      [NODE]: "node",
       [MANIFEST]: manifest({ bl: "dist/bailian.mjs" }),
       [ENTRY]: "cli",
     });
@@ -538,7 +545,7 @@ describe("alibaba token plan Windows resolution", () => {
       },
     });
     expect(result.ok).toBe(true);
-    expect(requests[0]?.file).toBe(process.execPath);
+    expect(requests[0]?.file).toBe(NODE);
     expect(requests[0]?.args).toEqual(SHIM_ARGS);
     expect(requests[0]?.shell).toBe(false);
     expect(requests[0]?.stdin).toBe("ignore");
@@ -566,7 +573,23 @@ describe("alibaba token plan Windows resolution", () => {
       },
     },
   ])("falls back to refusing the shim on $name", async ({ files }) => {
-    await mockWin32Files({ [SHIM]: "npm shim text", ...files });
+    await mockWin32Files({ [SHIM]: "npm shim text", [NODE]: "node", ...files });
+    expect(
+      await resolveAlibabaTokenPlanExecutable({
+        platform: "win32",
+        cwd: WORKSPACE,
+        homedir: HOME,
+        pathEnv: TRUSTED_BIN,
+      }),
+    ).toEqual(LAUNCHER_ERROR);
+  });
+
+  it("refuses the shim when no node is on the trusted PATH", async () => {
+    await mockWin32Files({
+      [SHIM]: "npm shim text",
+      [MANIFEST]: manifest({ bl: "dist/bailian.mjs" }),
+      [ENTRY]: "cli",
+    });
     expect(
       await resolveAlibabaTokenPlanExecutable({
         platform: "win32",

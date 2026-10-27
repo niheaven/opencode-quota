@@ -428,7 +428,7 @@ OpenCode Quota runs two commands, each with its own sign-in. They are independen
 - Neither command carries a region or account, so you see the plan `bl` is signed in to. `bl auth status` says which account, region and site that is.
 - One id reports it: `alibaba-token-plan`, and `alibaba-token-plan-cn` is another name for the same CLI, so a config that names it keeps working for provider selection and for `providers.off`.
 - Its rows are saved and shared between OpenCode windows, keyed to the account the CLI reports.
-- `bl` must be in an absolute folder on the [service `PATH`](troubleshooting.md#service-environment). A native `bl` runs directly, npm's `bl.cmd` shim is run with `node`, and other launchers are refused.
+- `bl` must be in an absolute folder on the [service `PATH`](troubleshooting.md#service-environment). A native `bl` runs directly, npm's `bl.cmd` shim is run with the `node` on that `PATH`, and other launchers are refused.
 - Cookie-based console scraping is not supported. After switching the CLI's console account, restart OpenCode or wait for the next live check.
 
 OpenCode Quota's Google integrations use independent community companion plugins. They are not endorsed by Google.

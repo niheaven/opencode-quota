@@ -192,8 +192,8 @@ type AlibabaTokenPlanExecutableResolution =
   | {
       ok: true;
       file: string;
-      /** Set when `file` is `node`: `[entry, ...ALIBABA_TOKEN_PLAN_ARGS]`; callers slice that tail
-       * off, so it must stay exactly `ALIBABA_TOKEN_PLAN_ARGS`. */
+      /** Set when `file` is `node`: `[entry]`, the shim package's entry, run before the command's
+       * own arguments. */
       args?: readonly string[];
     }
   | AlibabaFailure;
@@ -212,8 +212,9 @@ export const ERROR_MESSAGES: Record<AlibabaErrorKind, string> = {
   unsupported_platform: "Alibaba Token Plan is not supported on this platform.",
   executable_not_found: "Alibaba Cloud CLI (bl) was not found on the trusted PATH.",
   shell_launcher_rejected:
-    "Alibaba Token Plan refused a shell launcher for bl. Install it with `npm install -g bailian-cli`, whose shim resolves to the package's node entry.",
-  workspace_path_rejected: "Alibaba Token Plan ignored workspace and relative PATH entries.",
+    "Refused a shell launcher for the Alibaba Cloud CLI (bl). Install it with `npm install -g bailian-cli`, with node on the same PATH.",
+  workspace_path_rejected:
+    "Ignored workspace and relative PATH entries for the Alibaba Cloud CLI (bl).",
   spawn_failed: "Could not start Alibaba Cloud CLI.",
   timeout: "Timed out while running the Alibaba Cloud CLI.",
   output_truncated: "Alibaba Cloud CLI output exceeded the bounded size limit.",
@@ -366,18 +367,17 @@ async function resolveNodeShim(
   return (await isRegularFile(entry)) ? entry : null;
 }
 
-/** The node that runs a shim's entry: resolved as `bl` is, so `bl` and node come from one install. */
+/** The node that runs a shim's entry: resolved as `bl` is, so `bl` and node come from one install.
+ * No fallback to `process.execPath`: inside OpenCode that is OpenCode's own binary, not node. */
 async function resolveNodeExecutable(
   paths: path.PlatformPath,
-  platform: NodeJS.Platform,
   trusted: readonly string[],
-): Promise<string> {
-  const name = platform === "win32" ? "node.exe" : "node";
+): Promise<string | null> {
   for (const directory of trusted) {
-    const candidate = paths.join(directory, name);
+    const candidate = paths.join(directory, "node.exe");
     if (await isRegularFile(candidate)) return candidate;
   }
-  return process.execPath;
+  return null;
 }
 
 export async function resolveAlibabaTokenPlanExecutable(params: {
@@ -416,13 +416,8 @@ export async function resolveAlibabaTokenPlanExecutable(params: {
           !(projectFolder !== null && isPathInside(paths, projectFolder, resolved))
         ) {
           const entry = await resolveNodeShim(paths, candidate, SHIM_PACKAGE_NAME);
-          if (entry !== null) {
-            return {
-              ok: true,
-              file: await resolveNodeExecutable(paths, platform, trusted),
-              args: [entry, ...ALIBABA_TOKEN_PLAN_ARGS],
-            };
-          }
+          const node = entry === null ? null : await resolveNodeExecutable(paths, trusted);
+          if (entry !== null && node !== null) return { ok: true, file: node, args: [entry] };
         }
         sawShellLauncher = true;
         continue;
@@ -906,12 +901,10 @@ async function resolveAlibabaTokenPlanInvocation(
     [runtime.tmpdir ?? tmpdir(), home]
       .map((candidate) => paths.resolve(candidate))
       .find((candidate) => !isPathInside(paths, cwd, candidate)) ?? paths.parse(cwd).root;
-  const resolvedArgs = resolved.args ?? [];
   return {
     ok: true,
     file: resolved.file,
-    // The shim route appends the personal fixed arguments; drop them for this caller's own command.
-    prefixArgs: resolvedArgs.slice(0, resolvedArgs.length - ALIBABA_TOKEN_PLAN_ARGS.length),
+    prefixArgs: resolved.args ?? [],
     cwd: processCwd,
     env: envWithTrustedPath(
       runtime.env ?? process.env,

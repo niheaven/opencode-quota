@@ -109,7 +109,7 @@ Run `/quota_status` first. Every known provider has a section named after its id
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
-| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with `node`. See [setup](providers.md#alibaba-coding-plan). |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with the `node` on that `PATH`. See [setup](providers.md#alibaba-coding-plan). |
 | Console session missing | The Coding Plan is read through the console session: run `bl auth login --console`. |
 | No rows and no error    | The account has no Coding Plan subscription: the CLI prints `{}`, and OpenCode Quota then shows no rows, which is not a failure. |
 | Provider not detected   | Make sure the requests use OpenCode's `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `alibaba`, or `alibaba-cn` provider. |
@@ -121,7 +121,7 @@ Run `/quota_status` first. Every known provider has a section named after its id
 
 | Symptom                 | Fix |
 | ----------------------- | --- |
-| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with `node`. See [setup](providers.md#alibaba-token-plan). |
+| CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with the `node` on that `PATH`. See [setup](providers.md#alibaba-token-plan). |
 | Console session expired | The personal `Monthly` row needs the console session: run `bl auth login --console`. An AK/SK covers the team seats only. |
 | Team seats show no rows | Team seats need API Key (AK/SK) credentials: run `bl auth login --open-api`, or set `ALIBABA_CLOUD_ACCESS_KEY_ID` and `ALIBABA_CLOUD_ACCESS_KEY_SECRET`. A released seat has no row by design. |
 | The wrong plan          | The command carries no region or account: you see the plan `bl` is signed in to. `bl auth status` reports which account, region and site that is. |
