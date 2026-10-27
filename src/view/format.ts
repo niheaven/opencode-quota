@@ -4,7 +4,7 @@
  * Money, token counts and shares are written the way T3 Code's usage page writes them, always
  * in US English, so the text is the same on every machine.
  */
-import { MIN_ELAPSED_SHARE, type Pace } from "../core/pace.js";
+import type { Pace } from "../core/pace.js";
 import type { Amount, QuotaRow, SessionTokens, Words } from "../core/types.js";
 import type { Settings } from "../settings/schema.js";
 import { columnsOf, padEndColumns, sliceColumns } from "./columns.js";
@@ -151,7 +151,7 @@ export function paceLevel(pace: Pace, percentRemaining: number): Level | undefin
   if (pace.kind === "on_track") {
     return clampPercent(percentRemaining) >= pace.evenLeft ? "good" : "warning";
   }
-  return pace.evenLeft > (1 - MIN_ELAPSED_SHARE) * 100 ? undefined : "low";
+  return pace.early ? undefined : "low";
 }
 
 function groupDigits(integer: string): string {

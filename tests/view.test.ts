@@ -177,13 +177,13 @@ describe("view format", () => {
     { kind: "on_track", evenLeft: 98, left: 100, expected: "good" },
     { kind: "fast", evenLeft: 50, left: 30, expected: "low" },
     // Under a tenth of the window passed: no level, so the share left decides.
-    { kind: "fast", evenLeft: 95, left: 50, expected: undefined },
-    { kind: "fast", evenLeft: 95, left: 0, expected: undefined },
+    { kind: "fast", early: true, evenLeft: 95, left: 50, expected: undefined },
+    { kind: "fast", early: true, evenLeft: 95, left: 0, expected: undefined },
     { kind: "fast", evenLeft: 90, left: 50, expected: "low" },
   ] as const)(
     "$kind with $left% left and $evenLeft% of the window to come is $expected",
-    ({ kind, evenLeft, left, expected }) => {
-      expect(paceLevel({ evenLeft, kind }, left)).toBe(expected);
+    ({ left, expected, ...pace }) => {
+      expect(paceLevel(pace, left)).toBe(expected);
     },
   );
 

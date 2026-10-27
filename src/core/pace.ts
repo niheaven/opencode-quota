@@ -8,12 +8,14 @@ import { WINDOWS } from "./windows.js";
 /** Within this many percentage points of even use counts as on track. */
 const ON_TRACK_POINTS = 5;
 /** Before this share of the window has passed, the pace so far says too little for a run-out time. */
-export const MIN_ELAPSED_SHARE = 0.1;
+const MIN_ELAPSED_SHARE = 0.1;
 
 export type Pace = {
   /** The percent that would be left now with even use: the share of the window still to come. */
   evenLeft: number;
   kind: "spare" | "on_track" | "fast";
+  /** Only for "fast": less than a tenth of the window has passed, too early for a run-out time. */
+  early?: true;
   /** Only for "fast": when it runs out at the pace so far (always before the reset). */
   runsOutInMs?: number;
 };
@@ -40,7 +42,8 @@ export function paceOf(row: QuotaRow, nowMs: number): Pace | undefined {
   if (left > evenLeft + ON_TRACK_POINTS) return { evenLeft, kind: "spare" };
   if (left >= evenLeft - ON_TRACK_POINTS) return { evenLeft, kind: "on_track" };
   // Used faster than it refills: at the same rate, what is left runs out before the reset.
-  if (left === 0 || elapsedMs < lengthMs * MIN_ELAPSED_SHARE) return { evenLeft, kind: "fast" };
+  if (elapsedMs < lengthMs * MIN_ELAPSED_SHARE) return { evenLeft, kind: "fast", early: true };
+  if (left === 0) return { evenLeft, kind: "fast" };
   const runsOutInMs = (left / (100 - left)) * elapsedMs;
   return { evenLeft, kind: "fast", runsOutInMs };
 }

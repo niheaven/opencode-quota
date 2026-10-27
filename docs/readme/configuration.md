@@ -76,7 +76,7 @@ Roles are `good`, `warning`, `low`, `empty`, `title`, `provider`, `account`, `la
 
 | Setting | Default | Values |
 | --- | --- | --- |
-| `colors.levelBy` | `"left"` | `left` or `pace`. With `pace`, the level colors follow how fast a limit is used against even use until its reset: `good` at or under even use (an untouched limit included), `warning` up to 5 points faster than even use, `low` faster than that. Before a tenth of the window has passed, a fast pace says too little, so the row follows the share left, and a nearly used-up limit is still `low`. A row without a reset time or a known window length follows the share left. Toasts after a reply still go by the share left. **Bar colors follow** on the Colors tab. |
+| `colors.levelBy` | `"left"` | `left` or `pace`. With `pace`, the level colors follow how fast a limit is used against even use until its reset: `good` at or under even use (an untouched limit included), `warning` up to 5 points faster than even use, `low` faster than that. Before a tenth of the window has passed, a fast pace says too little, so the row follows the share left, and a nearly used-up limit is still `low`. A row without a reset time or a known window length follows the share left. Whether a toast shows after a reply (`toast.afterReply: "low"`) still goes by the share left. **Bar colors follow** on the Colors tab. |
 | `colors.warningBelow` | `50` | Whole number 0–100, percent left below which quota is getting low. |
 | `colors.lowBelow` | `20` | Whole number 0–100, percent left below which quota is almost out. |
 
