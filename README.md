@@ -14,6 +14,15 @@
   <a href="https://github.com/slkiser/opencode-quota/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/slkiser/opencode-quota/ci.yml?style=flat-square&branch=main&label=CI" /></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" /></a>
 </p>
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="docs/readme/i18n/README.zh.md">简体中文</a> |
+  <a href="docs/readme/i18n/README.zht.md">繁體中文</a> |
+  <a href="docs/readme/i18n/README.fr.md">Français</a> |
+  <a href="docs/readme/i18n/README.de.md">Deutsch</a> |
+  <a href="docs/readme/i18n/README.ja.md">日本語</a> |
+  <a href="docs/readme/i18n/README.es.md">Español</a>
+</p>
 
 <p align="center">
   <a href="https://github.com/slkiser/opencode-quota"><img src="https://shawnkiser.com/opencode-quota/opencode-quota-v6-hero.gif" alt="OpenCode Quota in OpenCode: the sidebar, the quota window's Usage and Limits tabs, and its settings" /></a>
