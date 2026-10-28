@@ -188,7 +188,8 @@ export const anthropicProvider: QuotaProvider = {
   },
 
   matchesCurrentModel(model: string): boolean {
-    return model.toLowerCase().startsWith("anthropic/");
+    const normalized = model.toLowerCase();
+    return normalized.startsWith("anthropic/") || normalized.startsWith("claude-code/");
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<ProviderFetchResult> {
