@@ -273,6 +273,19 @@ describe("package manifest compatibility", () => {
       ],
     ],
     [
+      "the packed-package global install smoke (npm 12, empty prefix)",
+      "../scripts/smoke-packed-global-install.mjs",
+      [
+        'const NPM_RANGE = "12";',
+        "`npm@${NPM_RANGE}`",
+        "npmVersion.startsWith(`${NPM_RANGE}.`)",
+        '[npmCli, "install", "-g", "--prefix", prefix, artifact.tarballPath]',
+        'path.join(prefix, "bin", "opencode-quota")',
+        "`slkiser-opencode-quota-${installed.version}.tgz`",
+      ],
+      [/legacy-peer-deps|strict-peer-deps|--force|--omit/],
+    ],
+    [
       "the real OpenTelemetry smoke fixture",
       "../scripts/fixtures/smoke-packed-real-otel.mjs",
       [
@@ -416,6 +429,16 @@ describe("package manifest compatibility", () => {
     expect(
       namedStep(smoke, "Smoke exact npm artifact on Node ${{ matrix.node-version }}").run,
     ).toBe("node scripts/smoke-packed-package.mjs package-artifacts");
+    const globalInstall =
+      "Install exact npm artifact globally with npm 12 on Node ${{ matrix.node-version }}";
+    expect(namedStep(smoke, globalInstall).run).toBe(
+      "node scripts/smoke-packed-global-install.mjs package-artifacts",
+    );
+    expectOrdered(smoke, [
+      "Download exact npm artifact",
+      "Smoke exact npm artifact on Node ${{ matrix.node-version }}",
+      globalInstall,
+    ]);
   });
 
   it("publishes only a release-tag artifact after both exact-artifact smoke jobs", () => {

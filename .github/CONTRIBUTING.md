@@ -23,7 +23,7 @@ pnpm install
 
 ## Checks
 
-Run `pnpm verify` before opening a PR. It runs lint and formatting, the TypeScript-version and history checks, the build (its `tsc` step is the type check), all tests (the cross-surface test among them), and the package contents check. CI runs the same command, then installs the packed package on Node 22 and 24 as a smoke test.
+Run `pnpm verify` before opening a PR. It runs lint and formatting, the TypeScript-version and history checks, the build (its `tsc` step is the type check), all tests (the cross-surface test among them), and the package contents check. CI runs the same command, then installs the packed package on Node 22 and 24 as a smoke test, once into a project and once globally with npm 12.
 
 For quick iteration: `pnpm run test:watch`.
 
