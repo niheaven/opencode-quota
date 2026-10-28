@@ -7,8 +7,8 @@ import path from "node:path";
 import { verifyReleaseArtifact } from "./lib/release-artifact.mjs";
 
 // Installs the packed tarball with `npm install -g` into an empty prefix, using npm 12 rather than
-// the npm that ships with Node. smoke-packed-package.mjs installs locally with the bundled npm, which
-// let 6.0.0 ship with an ERESOLVE that only npm 12 reports (#353).
+// the npm that ships with Node. smoke-packed-package.mjs installs locally, which only warns about the
+// peer conflict that made a global install of 6.0.0 fail with ERESOLVE (#353).
 const NPM_RANGE = "12";
 
 const inputPath = path.resolve(process.argv[2] ?? "package-artifacts");
@@ -30,7 +30,8 @@ function run(command, args, cwd) {
   if (result.status !== 0) {
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
-    process.exit(result.status ?? 1);
+    process.exitCode = result.status ?? 1;
+    throw new Error(`${path.basename(command)} ${args.join(" ")} exited with ${result.status}`);
   }
 
   return result.stdout;
