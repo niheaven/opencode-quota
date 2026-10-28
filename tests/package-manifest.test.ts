@@ -105,8 +105,8 @@ describe("package manifest compatibility", () => {
       ["devDependencies", "yaml", "^2.8.3"],
       ["peerDependencies", "@opencode/plugin", "2.0.28"],
       ["devDependencies", "@opencode/plugin", "2.0.28"],
-      ["dependencies", "@opentui/core", "^0.5.10"],
-      ["dependencies", "@opentui/solid", "^0.5.10"],
+      ["dependencies", "@opentui/core", "^0.5.17"],
+      ["dependencies", "@opentui/solid", "^0.5.17"],
       ["pnpm", "peerDependencyRules", undefined],
       // Vite+ is the only formatter and linter; Lefthook the only hook runner.
       ["devDependencies", "vite-plus", "1.2.0"],
@@ -208,8 +208,8 @@ describe("package manifest compatibility", () => {
       [
         'const EXPECTED_TYPESCRIPT_VERSION = "7.0.2";',
         'const EXPECTED_PLUGIN_VERSION = "2.0.28";',
-        'const EXPECTED_OPENTUI_SPECIFIER = "^0.5.10";',
-        'const EXPECTED_OPENTUI_VERSION = "0.5.10";',
+        'const EXPECTED_OPENTUI_SPECIFIER = "^0.5.17";',
+        'const EXPECTED_OPENTUI_VERSION = "0.5.17";',
         'const BUN_FFI_STRUCTS_VERSION = "0.3.1";',
         'const BUN_FFI_TYPESCRIPT_PEER = "^5";',
         "Known unmet peer:",
@@ -295,6 +295,61 @@ describe("package manifest compatibility", () => {
       for (const pattern of lacks) expect(source).not.toMatch(pattern);
     },
   );
+
+  // npm refuses to install this package (ERESOLVE, #353) when a dependency can resolve below the
+  // floor that the declared @opencode/plugin peer asks for. The peer is optional, so it only
+  // binds when we ship that dependency. A caret range such as ^0.5.10 does include 0.5.17, but
+  // @opentui/solid pins @opentui/core exactly, so the lowest version the range allows is the
+  // one that must satisfy the peer.
+  describe("dependencies against the @opencode/plugin peer", () => {
+    const parseVersion = (version: string): number[] => {
+      const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+      if (!match) throw new Error(`Unsupported version: ${version}`);
+      return match.slice(1).map(Number);
+    };
+
+    const compare = (a: number[], b: number[]): number =>
+      a.reduce((diff, part, index) => diff || part - b[index], 0);
+
+    const lowestVersionOf = (range: string): number[] => {
+      const match = range.match(/^(?:\^|~|>=)?(\d+\.\d+\.\d+)$/);
+      if (!match) throw new Error(`Unsupported dependency range: ${range}`);
+      return parseVersion(match[1]);
+    };
+
+    const peerAllowsFloorOf = (dependencyRange: string, peerRange: string): boolean => {
+      const lowest = lowestVersionOf(dependencyRange);
+      const atLeast = peerRange.match(/^>=(\d+\.\d+\.\d+)$/);
+      if (atLeast) return compare(lowest, parseVersion(atLeast[1])) >= 0;
+      return compare(lowest, parseVersion(peerRange)) === 0;
+    };
+
+    it("compares the lowest version a range allows with the peer", () => {
+      expect(peerAllowsFloorOf("^0.5.10", ">=0.5.17")).toBe(false);
+      expect(peerAllowsFloorOf("^0.5.17", ">=0.5.17")).toBe(true);
+      expect(peerAllowsFloorOf("~1.9.12", ">=1.9.0")).toBe(true);
+      expect(peerAllowsFloorOf("2.0.28", "2.0.28")).toBe(true);
+      expect(peerAllowsFloorOf("2.0.27", "2.0.28")).toBe(false);
+    });
+
+    it("lets every shipped dependency resolve at or above the peer's floor", async () => {
+      const declaredPeer = pkg.peerDependencies["@opencode/plugin"];
+      const installed = JSON.parse(await text("../node_modules/@opencode/plugin/package.json"));
+      expect(
+        installed.version,
+        `Install @opencode/plugin@${declaredPeer} (the declared peer) so this test reads its peers.`,
+      ).toBe(declaredPeer);
+
+      const conflicts = Object.entries(installed.peerDependencies as Record<string, string>)
+        .filter(([name]) => pkg.dependencies?.[name] !== undefined)
+        .filter(([name, peerRange]) => !peerAllowsFloorOf(pkg.dependencies[name], peerRange))
+        .map(
+          ([name, peerRange]) =>
+            `${name}: dependencies has ${pkg.dependencies[name]}, @opencode/plugin@${declaredPeer} needs ${peerRange}`,
+        );
+      expect(conflicts).toEqual([]);
+    });
+  });
 
   it("smokes the packed package after installing it, then installs the metrics SDK", () => {
     const tarballInstall = packedSmoke.indexOf(

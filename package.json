@@ -88,8 +88,8 @@
   },
   "dependencies": {
     "@opentelemetry/api": "~1.9.1",
-    "@opentui/core": "^0.5.10",
-    "@opentui/solid": "^0.5.10",
+    "@opentui/core": "^0.5.17",
+    "@opentui/solid": "^0.5.17",
     "jsonc-parser": "^3.3.1",
     "solid-js": "^1.9.12"
   },
