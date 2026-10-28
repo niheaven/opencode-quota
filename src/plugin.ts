@@ -38,6 +38,7 @@ import {
   notifyCredentialsChanged,
 } from "./lib/opencode-auth.js";
 import { reconcileDetectedProvidersInGlobalConfig } from "./lib/opencode-config-providers.js";
+import { getQuotaProviderRuntimeIds } from "./lib/provider-metadata.js";
 import { statusReport } from "./lib/quota-dialog-commands.js";
 import {
   containsQuotaReport,
@@ -139,9 +140,21 @@ export function createQuotaServerPlugin(
           .map((provider) => provider.id);
         if (options.reconcileDetectedProviders && detected.length > 0) {
           try {
+            // Only declare a provider through its own OpenCode id. A quota provider can be available
+            // through another plugin's provider id (claude-code for anthropic); declaring the
+            // canonical id would add a second, credential-less provider to the catalog.
+            const runtime = new Set(
+              (await ctx.provider.list()).data.map((provider) => provider.id),
+            );
             await reconcileDetectedProvidersInGlobalConfig({
               directory: locationDirectory,
-              detectedProviderIds: detected,
+              detectedProviderIds: detected.filter(
+                (id) =>
+                  runtime.has(id) ||
+                  !getQuotaProviderRuntimeIds(id).some(
+                    (runtimeId) => runtimeId !== id && runtime.has(runtimeId),
+                  ),
+              ),
             });
           } catch (error) {
             console.warn("Failed to add detected providers to global OpenCode config", error);
