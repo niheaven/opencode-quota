@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -40,25 +40,28 @@ function run(command, args, cwd) {
   return result.stdout;
 }
 
-async function findInstalledPackages(nodeModulesDir, names, found = []) {
-  let entries;
+// Follows symlinked package folders too; `visited` holds real paths so a link cycle ends.
+async function findInstalledPackages(nodeModulesDir, names, found = [], visited = new Set()) {
+  let entryNames;
   try {
-    entries = await readdir(nodeModulesDir, { withFileTypes: true });
+    entryNames = await readdir(nodeModulesDir);
   } catch (error) {
     if (error?.code === "ENOENT") return found;
     throw error;
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const packageDirs = entry.name.startsWith("@")
-      ? (await readdir(path.join(nodeModulesDir, entry.name))).map(
-          (name) => `${entry.name}/${name}`,
-        )
-      : [entry.name];
-    for (const name of packageDirs) {
+  for (const entryName of entryNames) {
+    const entryPath = path.join(nodeModulesDir, entryName);
+    if (!(await stat(entryPath)).isDirectory()) continue;
+    const packageNames = entryName.startsWith("@")
+      ? (await readdir(entryPath)).map((name) => `${entryName}/${name}`)
+      : [entryName];
+    for (const name of packageNames) {
       const packageDir = path.join(nodeModulesDir, name);
       if (names.includes(name)) found.push(packageDir);
-      await findInstalledPackages(path.join(packageDir, "node_modules"), names, found);
+      const realDir = await realpath(packageDir);
+      if (visited.has(realDir)) continue;
+      visited.add(realDir);
+      await findInstalledPackages(path.join(realDir, "node_modules"), names, found, visited);
     }
   }
   return found;

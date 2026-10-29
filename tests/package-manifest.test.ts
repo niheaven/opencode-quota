@@ -323,8 +323,9 @@ describe("package manifest compatibility", () => {
   );
 
   // npm refuses to install this package (ERESOLVE, #353) when a dependency can resolve below the
-  // floor that the declared @opencode/plugin peer asks for. The peer is optional, so it only
-  // binds when we ship that dependency. A caret range such as ^0.5.10 does include 0.5.17, but
+  // floor that the declared @opencode/plugin peer asks for. Its OpenTUI peers are optional: they
+  // may be absent, but a copy that is present must fit their range. OpenTUI is no longer a
+  // dependency, so this guards against adding one back. A caret range such as ^0.5.10 does include 0.5.17, but
   // @opentui/solid pins @opentui/core exactly, so the lowest version the range allows is the
   // one that must satisfy the peer.
   describe("dependencies against the @opencode/plugin peer", () => {
