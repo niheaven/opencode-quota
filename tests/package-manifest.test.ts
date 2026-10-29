@@ -35,7 +35,8 @@ const pkg = JSON.parse(await text("../package.json"));
 const pnpmWorkspace = await text("../pnpm-workspace.yaml");
 const tsconfig = JSON.parse(await text("../tsconfig.json"));
 const viteConfig = await text("../vite.config.ts");
-const lefthookConfig = parse(await text("../lefthook.yml"));
+const preCommitHook = await text("../.github/hooks/pre-commit");
+const prePushHook = await text("../.github/hooks/pre-push");
 const ciWorkflow = parse(await text("../.github/workflows/ci.yml")) as Workflow;
 const publishWorkflow = parse(await text("../.github/workflows/publish-npm.yml")) as Workflow;
 const packedSmoke = await text("../scripts/smoke-packed-package.mjs");
@@ -120,7 +121,7 @@ describe("package manifest compatibility", () => {
       ["peerDependenciesMeta", "@opentui/solid", { optional: true }],
       ["peerDependenciesMeta", "solid-js", { optional: true }],
       ["pnpm", "peerDependencyRules", undefined],
-      // Vite+ is the only formatter and linter; Lefthook the only hook runner.
+      // Vite+ is the only formatter, linter and Git hook runner.
       ["devDependencies", "vite-plus", "1.2.0"],
       ["devDependencies", "@biomejs/biome", undefined],
       ["devDependencies", "prettier", undefined],
@@ -135,10 +136,10 @@ describe("package manifest compatibility", () => {
       ["scripts", "test", "vp test run"],
       ["scripts", "test:watch", "vp test watch"],
       ["scripts", "verify:v4-formatting", undefined],
-      ["devDependencies", "lefthook", "2.0.15"],
+      ["devDependencies", "lefthook", undefined],
       ["devDependencies", "husky", undefined],
       ["devDependencies", "lint-staged", undefined],
-      ["scripts", "prepare", "lefthook install"],
+      ["scripts", "prepare", "vp config --no-agent --hooks-dir .github/hooks"],
       // The OpenTelemetry API ships; the metrics SDK stays host-owned. The API stays
       // on 1.9.x so it uses a host provider registered by API 1.9 or newer.
       ["optionalDependencies", null, undefined],
@@ -179,18 +180,15 @@ describe("package manifest compatibility", () => {
     expect(viteConfig).toContain('categories: { correctness: "error" }');
     // The build's tsc, on the pinned TypeScript, is the only type check.
     expect(viteConfig).not.toMatch(/typeAware|typeCheck/);
-    expect(lefthookConfig["pre-commit"]?.commands).toEqual({
-      check: {
-        glob: "**/*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,css}",
-        run: "pnpm exec vp check --fix --no-error-on-unmatched-pattern {staged_files}",
-        stage_fixed: true,
-      },
-    });
-    expect(lefthookConfig["pre-push"]?.commands).toEqual({ verify: { run: "pnpm verify" } });
+    // Keep the default backup and rollback for partially staged files.
+    expect(preCommitHook).toBe("vp staged\n");
+    expect(viteConfig).toContain(
+      '"*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,css}": "vp check --fix --no-error-on-unmatched-pattern",',
+    );
+    expect(prePushHook).toBe("pnpm verify\n");
     // Hardens dependency resolution against fresh-package supply-chain attacks.
     expect(parse(pnpmWorkspace).allowBuilds).toEqual({
       esbuild: true,
-      lefthook: true,
       "msgpackr-extract": true,
       protobufjs: false,
     });
@@ -203,6 +201,7 @@ describe("package manifest compatibility", () => {
       "../.prettierrc.json",
       "../scripts/verify-v4-formatting.mjs",
       "../.husky",
+      "../lefthook.yml",
       "../.lintstagedrc",
       "../biome.json",
       "../vitest.config.ts",
@@ -244,9 +243,24 @@ describe("package manifest compatibility", () => {
       ],
     ],
     ["the README", "../README.md", ["Node.js `22.13+` or `23.4+`"], ["OpenCode `>= 1.4.3`"]],
-    ["the pack script", "../scripts/pack-release-package.mjs", [], ["HUSKY", "LEFTHOOK"]],
-    ["the contents check", "../scripts/verify-package-contents.mjs", [], ["HUSKY", "LEFTHOOK"]],
-    ["the release check", "../scripts/verify-release-package.mjs", [], ["HUSKY", "LEFTHOOK"]],
+    [
+      "the pack script",
+      "../scripts/pack-release-package.mjs",
+      [],
+      ["HUSKY", "LEFTHOOK", "VP_GIT_HOOKS"],
+    ],
+    [
+      "the contents check",
+      "../scripts/verify-package-contents.mjs",
+      [],
+      ["HUSKY", "LEFTHOOK", "VP_GIT_HOOKS"],
+    ],
+    [
+      "the release check",
+      "../scripts/verify-release-package.mjs",
+      [],
+      ["HUSKY", "LEFTHOOK", "VP_GIT_HOOKS"],
+    ],
     [
       "the packed-package smoke (public imports, CLI, compiled TUI, OpenTelemetry)",
       "../scripts/smoke-packed-package.mjs",
