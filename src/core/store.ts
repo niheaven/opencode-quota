@@ -133,7 +133,7 @@ type RefreshOptions = {
 };
 
 type QuotaStoreDeps = {
-  source: () => Promise<StoreSource>;
+  source: (model?: SessionModel) => Promise<StoreSource>;
   /** The snapshot file; null keeps everything in memory. */
   file: string | null;
   now?: () => number;
@@ -513,11 +513,11 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   }
 
   /** Starts an operation: loads the file once, reads the providers and who each one is. */
-  async function prepare(): Promise<Operation> {
+  async function prepare(model?: SessionModel): Promise<Operation> {
     const startedIn = generation;
     await load();
     const message = "reading the quota providers timed out";
-    const source = await withTimeout(deps.source(), timeouts.readMs, message);
+    const source = await withTimeout(deps.source(model), timeouts.readMs, message);
     const keys = new Map<string, ResolvedKey>();
     await Promise.all(
       source.providers.map(async (provider) => {
@@ -725,9 +725,9 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   }
 
   /** An operation of the current generation: a login or settings change meanwhile reads again. */
-  async function prepareCurrent(): Promise<Operation> {
+  async function prepareCurrent(model?: SessionModel): Promise<Operation> {
     for (;;) {
-      const operation = await prepare();
+      const operation = await prepare(model);
       if (isCurrent(operation)) return operation;
     }
   }
@@ -752,7 +752,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   return {
     snapshot(options = {}) {
       return start(async () => {
-        const operation = await prepareCurrent();
+        const operation = await prepareCurrent(options.model);
         if (options.refresh !== false) {
           track(runRefresh(operation, { reason: "poll" })).catch((error) => {
             log(`background quota refresh failed: ${errorMessage(error)}`);
@@ -764,12 +764,12 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
 
     refresh(options) {
       return start(async () => {
-        const operation = await prepareCurrent();
+        const operation = await prepareCurrent(options.model);
         await runRefresh(operation, options);
         await flush();
         // A login or settings change dropped what this pass fetched: the answer shows the
         // providers and rows of now, and the new pass's rows follow as events.
-        const answering = isCurrent(operation) ? operation : await prepareCurrent();
+        const answering = isCurrent(operation) ? operation : await prepareCurrent(options.model);
         return buildSnapshot(answering, options.model);
       });
     },

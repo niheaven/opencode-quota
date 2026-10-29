@@ -300,7 +300,7 @@ describe("anthropic provider", () => {
   it.each([
     [["anthropic"], true, true],
     [["copilot", "anthropic"], true, true],
-    [["claude-code"], true, true],
+    [["claude-code"], true, false],
     [["claude"], true, false],
     [["anthropic"], false, false],
   ])(

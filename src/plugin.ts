@@ -173,7 +173,7 @@ export function createQuotaServerPlugin(
         providers: options.providers,
       };
       const store = createQuotaStore({
-        source: () => loadProviderSource(sourceHost),
+        source: (model) => loadProviderSource(sourceHost, model),
         file: snapshotFilePath(),
       });
       // The TUI reads the session model from its local store, which has nothing for an
