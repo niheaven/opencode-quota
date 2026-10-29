@@ -51,7 +51,7 @@
     "test:watch": "vp test watch",
     "verify": "pnpm run check && pnpm run verify:typescript-version && pnpm run verify:v4-history && pnpm run build && pnpm test && pnpm run verify:package-contents",
     "prepublishOnly": "pnpm run build",
-    "prepare": "lefthook install"
+    "prepare": "vp config --no-agent --hooks-dir .github/hooks"
   },
   "keywords": [
     "opencode",
@@ -81,7 +81,6 @@
     "@opentelemetry/sdk-metrics": "2.10.0",
     "@types/node": "^22.0.0",
     "babel-preset-solid": "^1.9.12",
-    "lefthook": "2.0.15",
     "typescript": "7.0.2",
     "vite-plus": "1.2.0",
     "yaml": "^2.8.3"

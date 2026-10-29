@@ -11,7 +11,7 @@ Thanks for contributing! Please read this before you open an issue or PR.
 
 ## Setup
 
-Node.js 22.18+, 24.11+ or 26+ (what Vite+ needs; the published plugin itself runs on `^22.13.0 || >=23.4.0`) and pnpm 11:
+Node.js 22.22.1+, 24.11+ or 26+ (what Vite+ and its staged-file check need; the published plugin itself runs on `^22.13.0 || >=23.4.0`), Git 2.32+ and pnpm 11:
 
 ```sh
 corepack enable
@@ -19,7 +19,9 @@ corepack prepare pnpm@11.7.0 --activate
 pnpm install
 ```
 
-`pnpm install` also installs the Git hooks: pre-commit formats and lints staged files and fixes what it can with Vite+ (`vp check --fix`); pre-push runs `pnpm verify`.
+`pnpm install` also sets up the Git hooks with Vite+ (`vp config`): pre-commit runs `vp staged`, which formats and lints the staged files, fixes what it can and stages the fixes (rules in the `staged` block of `vite.config.ts`); pre-push runs `pnpm verify`. The hook scripts are in `.github/hooks/`. Each checkout and Git worktree runs its own copy, so run `pnpm install` in each one.
+
+If Git's `core.hooksPath` already points to another folder, `pnpm install` leaves it alone and prints `core.hooksPath is already set to "…", skipping`, and these hooks don't run. `pnpm exec vp hooks status --hooks-dir .github/hooks` shows the current state. To skip the hooks for one command, set `VP_GIT_HOOKS=0`.
 
 ## Checks
 
