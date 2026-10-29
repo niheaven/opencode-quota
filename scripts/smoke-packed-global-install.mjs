@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -8,8 +8,11 @@ import { verifyReleaseArtifact } from "./lib/release-artifact.mjs";
 
 // Installs the packed tarball with `npm install -g` into an empty prefix, using npm 12 rather than
 // the npm that ships with Node. smoke-packed-package.mjs installs locally, which only warns about the
-// peer conflict that made a global install of 6.0.0 fail with ERESOLVE (#353).
+// peer conflict that made a global install of 6.0.0 fail with ERESOLVE (#353). `--engine-strict` turns
+// a dependency's unmet `engines.node` into an error. OpenCode gives TUI plugins its own OpenTUI and
+// Solid, so the install must not contain them; @opentui/core declares a newer Node than we support.
 const NPM_RANGE = "12";
+const HOST_PROVIDED_PACKAGES = ["@opentui/core", "@opentui/solid", "solid-js"];
 
 const inputPath = path.resolve(process.argv[2] ?? "package-artifacts");
 
@@ -37,6 +40,30 @@ function run(command, args, cwd) {
   return result.stdout;
 }
 
+async function findInstalledPackages(nodeModulesDir, names, found = []) {
+  let entries;
+  try {
+    entries = await readdir(nodeModulesDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return found;
+    throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const packageDirs = entry.name.startsWith("@")
+      ? (await readdir(path.join(nodeModulesDir, entry.name))).map(
+          (name) => `${entry.name}/${name}`,
+        )
+      : [entry.name];
+    for (const name of packageDirs) {
+      const packageDir = path.join(nodeModulesDir, name);
+      if (names.includes(name)) found.push(packageDir);
+      await findInstalledPackages(path.join(packageDir, "node_modules"), names, found);
+    }
+  }
+  return found;
+}
+
 const artifact = await verifyReleaseArtifact(inputPath);
 const workdir = await mkdtemp(path.join(tmpdir(), "opencode-quota-global-smoke-"));
 
@@ -56,7 +83,7 @@ try {
   await mkdir(path.join(prefix, "lib"), { recursive: true });
   run(
     process.execPath,
-    [npmCli, "install", "-g", "--prefix", prefix, artifact.tarballPath],
+    [npmCli, "install", "-g", "--engine-strict", "--prefix", prefix, artifact.tarballPath],
     workdir,
   );
 
@@ -73,6 +100,15 @@ try {
   assert.equal(installed.name, "@slkiser/opencode-quota");
   assert.equal(artifact.filename, `slkiser-opencode-quota-${installed.version}.tgz`);
   await access(path.join(prefix, "bin", "opencode-quota"));
+  const hostProvided = await findInstalledPackages(
+    path.join(prefix, "lib", "node_modules"),
+    HOST_PROVIDED_PACKAGES,
+  );
+  assert.deepEqual(
+    hostProvided,
+    [],
+    "The global install must leave OpenTUI and Solid to OpenCode.",
+  );
 
   console.log(
     `Global install smoke passed: npm ${npmVersion} installed ${artifact.filename} on Node ${process.versions.node} (sha256 ${artifact.sha256}).`,
