@@ -362,7 +362,7 @@ Organization example (for an enterprise, use `"tier": "enterprise"`, add `"enter
 
 ### Anthropic (Claude)
 
-OpenCode's Anthropic login is enough: each `anthropic` login is asked once per check at Anthropic's OAuth usage endpoint, and an expired one shows "Sign in again". Claude Code is optional. Without an OpenCode Anthropic login, quota comes from Claude Code itself or from Anthropic's usage endpoint with Claude Code's credentials (macOS Keychain, then `~/.claude/.credentials.json`). When Anthropic rejects an OpenCode login, `/quota_status` shows whether Claude Code and its credentials still work. To use it, install it and sign in:
+OpenCode's Anthropic login is enough: each `anthropic` login is asked once per check at Anthropic's OAuth usage endpoint, and an expired one shows "Sign in again". Claude Code is optional, except with an auth plugin that stores a placeholder login instead of a token (for example `@cortexkit/opencode-anthropic-auth`): that login is skipped, so quota needs a Claude Code login. Without an OpenCode Anthropic login, quota comes from Claude Code itself or from Anthropic's usage endpoint with Claude Code's credentials (macOS Keychain, then `~/.claude/.credentials.json`). When Anthropic rejects an OpenCode login, `/quota_status` shows whether Claude Code and its credentials still work. To use it, install it and sign in:
 
 ```bash
 claude auth login
