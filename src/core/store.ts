@@ -8,8 +8,8 @@
  *   none for a manual or retry refresh); failures back off from 1 to 15 minutes, or until the
  *   provider's own retry time.
  * - Every snapshot, refresh, login-change and settings-change pass is one operation: it reads
- *   the providers and who each one is signed in as once, and keeps both to its end. A login or
- *   settings change starts a new generation: an operation of an older one stores nothing and
+ *   the providers and who each one is signed in as once, and keeps both to its end. A login,
+ *   settings or session model change starts a new generation: an older operation stores nothing and
  *   tells subscribers nothing, and a snapshot or refresh it was answering answers with the
  *   providers and rows of the new one.
  * - Rows and reset notices belong to an identity (account plus provider settings). Those of
@@ -125,9 +125,10 @@ type RefreshReason = "poll" | "turn" | "manual" | "retry";
  * With a model, the snapshot also names the providers serving it. `refresh: false` answers the
  * saved rows without asking any provider, also for the due ones.
  */
-type SnapshotOptions = { model?: SessionModel; refresh?: boolean };
+type SnapshotOptions = { model?: SessionModel; sessionID?: string; refresh?: boolean };
 type RefreshOptions = {
   model?: SessionModel;
+  sessionID?: string;
   reason: RefreshReason;
   providerIds?: readonly string[];
   /** Refreshes only the providers serving `model` (the snapshot's `currentModelProviderIds`). */
@@ -136,6 +137,8 @@ type RefreshOptions = {
 
 type QuotaStoreDeps = {
   source: (model?: SessionModel) => Promise<StoreSource>;
+  /** Reads a session's current model, including for background refreshes. */
+  sessionModel?: (sessionID: string) => Promise<SessionModel>;
   /** The snapshot file; null keeps everything in memory. */
   file: string | null;
   now?: () => number;
@@ -157,6 +160,8 @@ export type QuotaStore = {
    * and each one is checked again at once.
    */
   settingsChanged(options: { recheck: boolean }): void;
+  /** A tracked session selected another model: resolve its scope and refresh due providers. */
+  sessionModelChanged(sessionID: string): void;
   /** Refuses new work and waits for running operations and the last file write. */
   dispose(): Promise<void>;
 };
@@ -177,6 +182,7 @@ type Operation = {
   source: StoreSource;
   keys: Map<string, ResolvedKey>;
   model?: SessionModel;
+  sessionID?: string;
   scope: string;
 };
 
@@ -382,8 +388,10 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   const inFlight = new Map<string, Promise<void>>();
   /** Running fetches per cache identity (an old one may still run after a login change). */
   const fetching = new Map<string, number>();
-  /** The last operation per credential source, with the model that selected it. */
+  /** The last operation per session, or per credential source for callers without a session. */
   const views = new Map<string, Operation>();
+  /** Includes a session whose first provider or identity read is still running. */
+  const sessions = new Set<string>();
   const listeners = new Set<(snapshot: QuotaSnapshot) => void>();
   /** Running operations and background refreshes; `dispose` waits for them. */
   const tasks = new Set<Promise<unknown>>();
@@ -506,7 +514,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   }
 
   /** Who `provider` is signed in as now; unknown (memory only) when that can't be read. */
-  async function resolveKey(provider: StoreProvider): Promise<ResolvedKey> {
+  async function resolveKey(provider: StoreProvider, scope: string): Promise<ResolvedKey> {
     try {
       const message = `reading the ${provider.id} login timed out`;
       return resolvedKey(
@@ -514,32 +522,41 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
         await withTimeout(provider.identity(), timeouts.readMs, message),
       );
     } catch {
-      return resolvedKey(provider.id, { key: "unknown", persist: false });
+      return resolvedKey(provider.id, { key: `unknown\u001f${scope}`, persist: false });
     }
   }
 
   /** Starts an operation: loads the file once, reads the providers and who each one is. */
-  async function prepare(model?: SessionModel): Promise<Operation> {
+  async function prepare(model?: SessionModel, sessionID?: string): Promise<Operation> {
+    if (sessionID) sessions.add(sessionID);
     const startedIn = generation;
     await load();
+    if (sessionID && deps.sessionModel) {
+      model = await withTimeout(
+        deps.sessionModel(sessionID),
+        timeouts.readMs,
+        "reading the session model timed out",
+      );
+    }
     const message = "reading the quota providers timed out";
     const source = await withTimeout(deps.source(model), timeouts.readMs, message);
+    const scope = source.scope === undefined ? "" : hashText(source.scope, 32);
     const keys = new Map<string, ResolvedKey>();
     await Promise.all(
       source.providers.map(async (provider) => {
-        keys.set(provider.id, await resolveKey(provider));
+        keys.set(provider.id, await resolveKey(provider, scope));
       }),
     );
-    const scope = source.scope === undefined ? "" : hashText(source.scope, 32);
-    const operation = { generation: startedIn, source, keys, model, scope };
-    if (isCurrent(operation)) views.set(scope, operation);
+    const operation = { generation: startedIn, source, keys, model, scope, sessionID };
+    if (isCurrent(operation)) views.set(sessionID ? `session:${sessionID}` : scope, operation);
     // The rows read from the file, or a provider turned on or off, are news to subscribers.
     if (providerIdsOf(operation) !== heardProviders.get(scope)) emit(operation);
     return operation;
   }
 
   /** The snapshot an operation sees; a stale one shows no rows (whose they are is unknown). */
-  function buildSnapshot(operation: Operation, model?: SessionModel): QuotaSnapshot {
+  function buildSnapshot(operation: Operation): QuotaSnapshot {
+    const { model, sessionID } = operation;
     const nowMs = now();
     const current = isCurrent(operation);
     const resetNotices: ResetNotice[] = [];
@@ -564,6 +581,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     revision += 1;
     const snapshot: QuotaSnapshot = {
       version: 6,
+      ...(sessionID ? { sessionID } : {}),
       ...(operation.scope ? { sourceScope: operation.scope } : {}),
       providers,
       resetNotices,
@@ -686,7 +704,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     // A fetch is stored only under the account it read. A login change (new generation) or
     // another account now (same generation) drops its answer.
     if (!isCurrent(operation)) return;
-    const after = await resolveKey(provider);
+    const after = await resolveKey(provider, operation.scope);
     if (!isCurrent(operation)) return;
     if (after.key !== where.key) {
       operation.keys.set(provider.id, after);
@@ -740,9 +758,9 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   }
 
   /** An operation of the current generation: a login or settings change meanwhile reads again. */
-  async function prepareCurrent(model?: SessionModel): Promise<Operation> {
+  async function prepareCurrent(model?: SessionModel, sessionID?: string): Promise<Operation> {
     for (;;) {
-      const operation = await prepare(model);
+      const operation = await prepare(model, sessionID);
       if (isCurrent(operation)) return operation;
     }
   }
@@ -754,12 +772,14 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   function supersede(reason: RefreshReason, failure: string): void {
     generation += 1;
     inFlight.clear();
-    const models = views.size ? [...views.values()].map((view) => view.model) : [undefined];
+    const targets: Array<{ model?: SessionModel; sessionID?: string }> = views.size
+      ? [...views.values()]
+      : [{}];
     // Subscribers see the new providers and rows (or none) before any fetch, then fresh ones.
     start(async () => {
       await Promise.all(
-        models.map(async (model) => {
-          const operation = await prepare(model);
+        targets.map(async ({ model, sessionID }) => {
+          const operation = await prepare(model, sessionID);
           emit(operation);
           await runRefresh(operation, { reason });
         }),
@@ -772,25 +792,27 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   return {
     snapshot(options = {}) {
       return start(async () => {
-        const operation = await prepareCurrent(options.model);
+        const operation = await prepareCurrent(options.model, options.sessionID);
         if (options.refresh !== false) {
           track(runRefresh(operation, { reason: "poll" })).catch((error) => {
             log(`background quota refresh failed: ${errorMessage(error)}`);
           });
         }
-        return buildSnapshot(operation, options.model);
+        return buildSnapshot(operation);
       });
     },
 
     refresh(options) {
       return start(async () => {
-        const operation = await prepareCurrent(options.model);
-        await runRefresh(operation, options);
+        const operation = await prepareCurrent(options.model, options.sessionID);
+        await runRefresh(operation, { ...options, model: operation.model });
         await flush();
         // A login or settings change dropped what this pass fetched: the answer shows the
         // providers and rows of now, and the new pass's rows follow as events.
-        const answering = isCurrent(operation) ? operation : await prepareCurrent(options.model);
-        return buildSnapshot(answering, options.model);
+        const answering = isCurrent(operation)
+          ? operation
+          : await prepareCurrent(options.model, options.sessionID);
+        return buildSnapshot(answering);
       });
     },
 
@@ -821,6 +843,11 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
       endFileWaits();
       // A manual refresh waits for no interval: every provider is checked again now.
       supersede("manual", "quota recheck after a settings change failed");
+    },
+
+    sessionModelChanged(sessionID) {
+      if (disposed || !sessions.has(sessionID)) return;
+      supersede("poll", "quota refresh after a session model change failed");
     },
 
     async dispose() {

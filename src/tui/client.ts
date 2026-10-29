@@ -6,8 +6,8 @@
  *
  * Answers can arrive out of order. The newest snapshot per credential source wins; a snapshot
  * from another server (a new `serverId`: OpenCode restarted it) always wins, as its revisions
- * start over, and from then on the old server's answers are ignored. What a snapshot says
- * about one session comes from the latest call about it.
+ * start over, and from then on the old server's answers are ignored. A session's model follows
+ * its newest revision; its token totals come from the latest call about it.
  */
 import { createSignal } from "solid-js";
 import type { QuotaSnapshot } from "../core/types.js";
@@ -139,9 +139,10 @@ export function createQuotaClient(
   let globalWatchers = 0;
   let homeWatchers = 0;
   let running = false;
-  /** Numbers every call; a session's part is kept only from a later call than the last one. */
+  /** Numbers every call; session token totals come only from a later call than the last one. */
   let calls = 0;
   const sessionCalls = new Map<string, number>();
+  const sessionRevisions = new Map<string, number>();
   /** Servers this client moved away from; their answers are ignored. */
   const retiredServers = new Set<string>();
   /** Bumped when the TUI stops: answers to calls made before then are dropped. */
@@ -154,14 +155,24 @@ export function createQuotaClient(
   const rpc = () => host.client.rpc(QuotaRpc);
 
   /** `call` numbers the request a session's part came from. */
-  function apply(snapshot: QuotaSnapshot, session?: { id?: string; call: number }): void {
-    const { currentModelProviderIds, currentModelRowPrefixes, sessionTokens, ...shared } = snapshot;
+  function apply(
+    snapshot: QuotaSnapshot,
+    session?: { id?: string; call: number; notices?: boolean },
+  ): void {
+    const {
+      sessionID: snapshotSessionID,
+      currentModelProviderIds,
+      currentModelRowPrefixes,
+      sessionTokens,
+      ...shared
+    } = snapshot;
     if (retiredServers.has(shared.serverId)) return;
     // An answer that left before a newer snapshot arrived must not undo it.
     const current = latest();
     if (current && current.serverId !== shared.serverId) {
       retiredServers.add(current.serverId);
       setSources({});
+      sessionRevisions.clear();
     }
     if (!current || current.serverId !== shared.serverId || current.revision < shared.revision) {
       setLatest(shared);
@@ -172,23 +183,31 @@ export function createQuotaClient(
       setSources((all) => ({ ...all, [scope]: shared }));
     }
     if (session && !session.id) setDefaultScope(scope);
-    const sessionID = session?.id;
-    if (session && sessionID && session.call > (sessionCalls.get(sessionID) ?? 0)) {
-      sessionCalls.set(sessionID, session.call);
+    const sessionID = session?.id ?? snapshotSessionID;
+    if (sessionID) {
+      const newerCall = session && session.call > (sessionCalls.get(sessionID) ?? 0);
+      const newerModel = shared.revision > (sessionRevisions.get(sessionID) ?? 0);
+      if (newerCall) sessionCalls.set(sessionID, session.call);
+      if (newerModel) sessionRevisions.set(sessionID, shared.revision);
       setSessions((all) => ({
         ...all,
         [sessionID]: {
-          ...(shared.sourceScope ? { sourceScope: shared.sourceScope } : {}),
-          ...(currentModelProviderIds ? { currentModelProviderIds } : {}),
-          ...(currentModelRowPrefixes ? { currentModelRowPrefixes } : {}),
-          ...(sessionTokens ? { sessionTokens } : {}),
+          ...all[sessionID],
+          ...(newerModel
+            ? { sourceScope: shared.sourceScope, currentModelProviderIds, currentModelRowPrefixes }
+            : {}),
+          ...(newerCall ? { sessionTokens } : {}),
         },
       }));
     }
     // Settings are shared; reset notices, like rows, belong only to sources this TUI uses.
-    const known = Object.values(sessions()).some((part) => (part.sourceScope ?? "") === scope);
+    const active = [...watched.keys()].some(
+      (id) => sessions()[id] && (sessions()[id].sourceScope ?? "") === scope,
+    );
+    const requested =
+      session?.notices && (!session.id || (sessions()[session.id]?.sourceScope ?? "") === scope);
     onSnapshot(
-      session || known || scope === (defaultScope() ?? "")
+      requested || active || (globalWatchers > 0 && scope === (defaultScope() ?? ""))
         ? snapshot
         : { ...snapshot, resetNotices: [] },
     );
@@ -302,7 +321,7 @@ export function createQuotaClient(
         subscribe();
         const output = await rpc().refresh(input, quotaCallOptions(host));
         if (at !== mount) return undefined;
-        apply(output.snapshot, { id: sessionID, call });
+        apply(output.snapshot, { id: sessionID, call, notices: true });
         return snapshot(sessionID);
       } catch (error) {
         reportFailure(error);
