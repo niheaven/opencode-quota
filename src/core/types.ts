@@ -155,6 +155,8 @@ export type SessionModel = { id?: string; providerID?: string };
 
 export type QuotaSnapshot = {
   version: 6;
+  /** Opaque credential-source scope; only snapshots of the same scope share provider rows. */
+  sourceScope?: string;
   /** Enabled and available providers, in registration order. */
   providers: ProviderSnapshot[];
   /** With a session: the providers serving its current model (the "current model only" filter). */

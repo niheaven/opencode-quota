@@ -264,6 +264,16 @@ export async function loadProviderSource(
   const loaded = host.settings();
   const providers = registeredProviders(host);
   const ctx = providerContext(host, loaded, model);
+  // Resolve scopes even for unavailable or disabled providers: their absence must belong to
+  // the same credential source as their rows. Settings changes keep that source's scope.
+  const scopes = await Promise.all(
+    providers.map(async (provider) => {
+      if (provider.cachePolicy?.kind !== "resolved-auth") return undefined;
+      const scope = await provider.cachePolicy.resolveScope?.(ctx);
+      return scope === undefined ? undefined : [provider.id, scope];
+    }),
+  );
+  const scoped = scopes.filter((scope) => scope !== undefined);
   const { enabledProviders } = ctx.config;
   const enabled = providers.filter((provider) => enabledProviders.includes(provider.id));
   const available = await Promise.all(
@@ -289,6 +299,7 @@ export async function loadProviderSource(
     ? await openCodeProviderIds(ctx)
     : new Set<string>();
   return {
+    ...(scoped.length ? { scope: JSON.stringify(scoped) } : {}),
     providers: enabled
       .filter((_, index) => available[index])
       .map((provider) => storeProvider(provider, ctx, settingsKey)),

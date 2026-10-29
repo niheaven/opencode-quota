@@ -4,7 +4,7 @@
  *
  * - `snapshot()` answers at once from what is known; when a provider is due it starts a
  *   background refresh.
- * - Refreshes are single-flight per provider and keep a minimum interval (30 s after a turn,
+ * - Refreshes are single-flight per cache identity and keep a minimum interval (30 s after a turn,
  *   none for a manual or retry refresh); failures back off from 1 to 15 minutes, or until the
  *   provider's own retry time.
  * - Every snapshot, refresh, login-change and settings-change pass is one operation: it reads
@@ -110,6 +110,8 @@ export type StoreProvider = {
 
 /** The providers to show and refresh now (enabled and available, in registration order). */
 export type StoreSource = {
+  /** Credential sources selected by the runtime, including providers with no available login. */
+  scope?: string;
   providers: StoreProvider[];
   minIntervalMs: number;
   /** The providers serving a session's model, from the same settings read as `providers`. */
@@ -174,6 +176,8 @@ type Operation = {
   generation: number;
   source: StoreSource;
   keys: Map<string, ResolvedKey>;
+  model?: SessionModel;
+  scope: string;
 };
 
 function hashText(text: string, length: number): string {
@@ -376,8 +380,10 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   /** A login change or settings recheck ended those waits, also before the file was read. */
   let fileWaitsEnded = false;
   const inFlight = new Map<string, Promise<void>>();
-  /** Running fetches per provider (an old one may still run after a login change). */
+  /** Running fetches per cache identity (an old one may still run after a login change). */
   const fetching = new Map<string, number>();
+  /** The last operation per credential source, with the model that selected it. */
+  const views = new Map<string, Operation>();
   const listeners = new Set<(snapshot: QuotaSnapshot) => void>();
   /** Running operations and background refreshes; `dispose` waits for them. */
   const tasks = new Set<Promise<unknown>>();
@@ -393,8 +399,8 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   const serverId = randomUUID();
   /** The last snapshot's revision; each next snapshot gets one more. */
   let revision = 0;
-  /** The provider ids subscribers last heard of; undefined until the first snapshot. */
-  let heardProviders: string | undefined;
+  /** The provider ids subscribers last heard of, per credential source. */
+  const heardProviders = new Map<string, string>();
 
   function track<T>(promise: Promise<T>): Promise<T> {
     tasks.add(promise);
@@ -524,9 +530,11 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
         keys.set(provider.id, await resolveKey(provider));
       }),
     );
-    const operation = { generation: startedIn, source, keys };
+    const scope = source.scope === undefined ? "" : hashText(source.scope, 32);
+    const operation = { generation: startedIn, source, keys, model, scope };
+    if (isCurrent(operation)) views.set(scope, operation);
     // The rows read from the file, or a provider turned on or off, are news to subscribers.
-    if (providerIdsOf(operation) !== heardProviders) emit(operation);
+    if (providerIdsOf(operation) !== heardProviders.get(scope)) emit(operation);
     return operation;
   }
 
@@ -548,7 +556,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
         ...(entry?.okAtMs === undefined ? {} : { okAtMs: entry.okAtMs }),
         ...(entry?.checkedAtMs === undefined ? {} : { checkedAtMs: entry.checkedAtMs }),
         ...(entry?.error === undefined ? {} : { error: entry.error }),
-        refreshing: fetching.has(provider.id),
+        refreshing: key !== undefined && fetching.has(key),
         debug: entry?.debug ?? [],
         ...(entry?.exportPart === undefined ? {} : { exportPart: entry.exportPart }),
       };
@@ -556,6 +564,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     revision += 1;
     const snapshot: QuotaSnapshot = {
       version: 6,
+      ...(operation.scope ? { sourceScope: operation.scope } : {}),
       providers,
       resetNotices,
       generatedAtMs: nowMs,
@@ -585,7 +594,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
 
   function emit(operation: Operation): void {
     if (listeners.size === 0 || !isCurrent(operation)) return;
-    heardProviders = providerIdsOf(operation);
+    heardProviders.set(operation.scope, providerIdsOf(operation));
     const snapshot = buildSnapshot(operation);
     for (const listener of listeners) {
       try {
@@ -647,17 +656,17 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     persist();
   }
 
-  async function fetchProvider(provider: StoreProvider): Promise<ProviderFetch> {
-    fetching.set(provider.id, (fetching.get(provider.id) ?? 0) + 1);
+  async function fetchProvider(provider: StoreProvider, key: string): Promise<ProviderFetch> {
+    fetching.set(key, (fetching.get(key) ?? 0) + 1);
     try {
       const message = `Request timeout after ${Math.round(timeouts.fetchMs / 1000)}s`;
       return await withTimeout(provider.fetch(), timeouts.fetchMs, message);
     } catch (error) {
       return { rows: [], error: classifyError(errorMessage(error), now()), debug: [] };
     } finally {
-      const left = (fetching.get(provider.id) ?? 1) - 1;
-      if (left > 0) fetching.set(provider.id, left);
-      else fetching.delete(provider.id);
+      const left = (fetching.get(key) ?? 1) - 1;
+      if (left > 0) fetching.set(key, left);
+      else fetching.delete(key);
     }
   }
 
@@ -673,7 +682,7 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     // provider waits instead, so a plugin reload asks no sooner than the last process would.
     const last = lastCheckOf(entries.get(where.key)) ?? fileLastCheck(provider.id, where);
     if (!isDue(last, reason, minIntervalMs, now())) return;
-    const result = await fetchProvider(provider);
+    const result = await fetchProvider(provider, where.key);
     // A fetch is stored only under the account it read. A login change (new generation) or
     // another account now (same generation) drops its answer.
     if (!isCurrent(operation)) return;
@@ -684,7 +693,11 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
       return;
     }
     record(provider, where, result);
-    emit(operation);
+    // Providers with the same identity share new rows across scopes; each view still reads
+    // its own keys for providers whose credential source differs.
+    for (const view of views.values()) {
+      if (view.keys.get(provider.id)?.key === where.key) emit(view);
+    }
   }
 
   function refreshProvider(
@@ -695,12 +708,14 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
     // A stale operation never joins or starts a refresh: one of the new generation would join
     // its run, which fetches nothing.
     if (disposed || !isCurrent(operation)) return Promise.resolve();
-    const running = inFlight.get(provider.id);
+    const key = operation.keys.get(provider.id)?.key;
+    if (key === undefined) return Promise.resolve();
+    const running = inFlight.get(key);
     if (running) return running;
     const run: Promise<void> = refreshProviderNow(operation, provider, reason).finally(() => {
-      if (inFlight.get(provider.id) === run) inFlight.delete(provider.id);
+      if (inFlight.get(key) === run) inFlight.delete(key);
     });
-    inFlight.set(provider.id, run);
+    inFlight.set(key, run);
     return run;
   }
 
@@ -739,11 +754,16 @@ export function createQuotaStore(deps: QuotaStoreDeps): QuotaStore {
   function supersede(reason: RefreshReason, failure: string): void {
     generation += 1;
     inFlight.clear();
+    const models = views.size ? [...views.values()].map((view) => view.model) : [undefined];
     // Subscribers see the new providers and rows (or none) before any fetch, then fresh ones.
     start(async () => {
-      const operation = await prepare();
-      emit(operation);
-      await runRefresh(operation, { reason });
+      await Promise.all(
+        models.map(async (model) => {
+          const operation = await prepare(model);
+          emit(operation);
+          await runRefresh(operation, { reason });
+        }),
+      );
     }).catch((error) => {
       log(`${failure}: ${errorMessage(error)}`);
     });

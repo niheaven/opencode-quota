@@ -4,7 +4,7 @@
  * shows, `refresh` after a turn), applies every `changed` event, and asks again every minute
  * in case an event was missed. Nothing reaches OpenCode until a surface shows or a turn ends.
  *
- * Answers can arrive out of order. The newest snapshot (highest `revision`) wins; a snapshot
+ * Answers can arrive out of order. The newest snapshot per credential source wins; a snapshot
  * from another server (a new `serverId`: OpenCode restarted it) always wins, as its revisions
  * start over, and from then on the old server's answers are ignored. What a snapshot says
  * about one session comes from the latest call about it.
@@ -72,7 +72,7 @@ export function quotaCallOptions(host: RpcLocationHost): QuotaRpcCallOptions {
 /** What a snapshot says only about one session. */
 type SessionPart = Pick<
   QuotaSnapshot,
-  "currentModelProviderIds" | "currentModelRowPrefixes" | "sessionTokens"
+  "currentModelProviderIds" | "currentModelRowPrefixes" | "sessionTokens" | "sourceScope"
 >;
 
 export type QuotaClient = {
@@ -129,7 +129,9 @@ export function createQuotaClient(
   onSnapshot: (snapshot: QuotaSnapshot) => void = () => {},
 ): QuotaClient {
   const [latest, setLatest] = createSignal<QuotaSnapshot>();
+  const [sources, setSources] = createSignal<Record<string, QuotaSnapshot>>({});
   const [sessions, setSessions] = createSignal<Record<string, SessionPart>>({});
+  const [defaultScope, setDefaultScope] = createSignal<string>();
   const [homeLine, setHomeLine] = createSignal("");
   /** Sessions on screen, with how many surfaces show each. */
   const watched = new Map<string, number>();
@@ -152,27 +154,44 @@ export function createQuotaClient(
   const rpc = () => host.client.rpc(QuotaRpc);
 
   /** `call` numbers the request a session's part came from. */
-  function apply(snapshot: QuotaSnapshot, session?: { id: string; call: number }): void {
+  function apply(snapshot: QuotaSnapshot, session?: { id?: string; call: number }): void {
     const { currentModelProviderIds, currentModelRowPrefixes, sessionTokens, ...shared } = snapshot;
     if (retiredServers.has(shared.serverId)) return;
     // An answer that left before a newer snapshot arrived must not undo it.
     const current = latest();
-    if (current && current.serverId !== shared.serverId) retiredServers.add(current.serverId);
+    if (current && current.serverId !== shared.serverId) {
+      retiredServers.add(current.serverId);
+      setSources({});
+    }
     if (!current || current.serverId !== shared.serverId || current.revision < shared.revision) {
       setLatest(shared);
     }
-    if (session && session.call > (sessionCalls.get(session.id) ?? 0)) {
-      sessionCalls.set(session.id, session.call);
+    const scope = shared.sourceScope ?? "";
+    const previous = sources()[scope];
+    if (!previous || previous.revision < shared.revision) {
+      setSources((all) => ({ ...all, [scope]: shared }));
+    }
+    if (session && !session.id) setDefaultScope(scope);
+    const sessionID = session?.id;
+    if (session && sessionID && session.call > (sessionCalls.get(sessionID) ?? 0)) {
+      sessionCalls.set(sessionID, session.call);
       setSessions((all) => ({
         ...all,
-        [session.id]: {
+        [sessionID]: {
+          ...(shared.sourceScope ? { sourceScope: shared.sourceScope } : {}),
           ...(currentModelProviderIds ? { currentModelProviderIds } : {}),
           ...(currentModelRowPrefixes ? { currentModelRowPrefixes } : {}),
           ...(sessionTokens ? { sessionTokens } : {}),
         },
       }));
     }
-    onSnapshot(snapshot);
+    // Settings are shared; reset notices, like rows, belong only to sources this TUI uses.
+    const known = Object.values(sessions()).some((part) => (part.sourceScope ?? "") === scope);
+    onSnapshot(
+      session || known || scope === (defaultScope() ?? "")
+        ? snapshot
+        : { ...snapshot, resetNotices: [] },
+    );
   }
 
   function subscribe(): void {
@@ -204,7 +223,7 @@ export function createQuotaClient(
     rpc()
       .snapshot(sessionID ? { sessionID } : {}, quotaCallOptions(host))
       .then((output) => {
-        if (at === mount) apply(output.snapshot, sessionID ? { id: sessionID, call } : undefined);
+        if (at === mount) apply(output.snapshot, { id: sessionID, call });
       })
       .catch(reportFailure)
       .finally(() => {
@@ -226,7 +245,18 @@ export function createQuotaClient(
     const shared = latest();
     if (!shared) return undefined;
     const part = sessionID ? sessions()[sessionID] : undefined;
-    return part ? { ...shared, ...part } : shared;
+    if (sessionID && !part && shared.sourceScope) return undefined;
+    const scope = part ? (part.sourceScope ?? "") : (defaultScope() ?? shared.sourceScope ?? "");
+    const source = sources()[scope];
+    if (!source) return undefined;
+    const { sourceScope: _scope, ...common } = shared;
+    return {
+      ...common,
+      providers: source.providers,
+      resetNotices: source.resetNotices,
+      ...(source.sourceScope ? { sourceScope: source.sourceScope } : {}),
+      ...part,
+    };
   }
 
   function poll(): void {
@@ -272,7 +302,7 @@ export function createQuotaClient(
         subscribe();
         const output = await rpc().refresh(input, quotaCallOptions(host));
         if (at !== mount) return undefined;
-        apply(output.snapshot, sessionID ? { id: sessionID, call } : undefined);
+        apply(output.snapshot, { id: sessionID, call });
         return snapshot(sessionID);
       } catch (error) {
         reportFailure(error);
