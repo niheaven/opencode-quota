@@ -168,8 +168,8 @@ describe("package manifest compatibility", () => {
     expect(viteConfig).toContain('categories: { correctness: "error" }');
     // The build's tsc, on the pinned TypeScript, is the only type check.
     expect(viteConfig).not.toMatch(/typeAware|typeCheck/);
-    // No backup stash: the stash list is shared by every worktree of the repository.
-    expect(preCommitHook).toBe("vp staged --no-stash\n");
+    // Keep the default backup and rollback for partially staged files.
+    expect(preCommitHook).toBe("vp staged\n");
     expect(viteConfig).toContain(
       '"*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,css}": "vp check --fix --no-error-on-unmatched-pattern",',
     );
