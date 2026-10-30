@@ -129,14 +129,14 @@ export function normalizeLatestPublishedPluginVersion(spec, packument) {
 
     if (discoveredRepo !== spec.repo) {
       throw new Error(
-        `Package ${spec.packageName} points to ${discoveredRepo}, but this repo expects ${spec.repo}. Update scripts/lib/upstream-plugin-specs.mjs if the upstream repo moved.`,
+        `Package ${spec.packageName} points to ${discoveredRepo}, but this repo expects ${spec.repo}. Update .github/scripts/lib/upstream-plugin-specs.mjs if the upstream repo moved.`,
       );
     }
   }
 
   if (repositoryMetadata.length === 0 && !spec.allowMissingRepositoryMetadata) {
     throw new Error(
-      `Package ${spec.packageName} is missing GitHub repository metadata. Set allowMissingRepositoryMetadata in scripts/lib/upstream-plugin-specs.mjs only after verifying the canonical repository from primary sources.`,
+      `Package ${spec.packageName} is missing GitHub repository metadata. Set allowMissingRepositoryMetadata in .github/scripts/lib/upstream-plugin-specs.mjs only after verifying the canonical repository from primary sources.`,
     );
   }
 

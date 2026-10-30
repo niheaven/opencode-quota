@@ -44,7 +44,9 @@ function run(command, args, cwd, options = {}) {
 
 const artifact = await verifyReleaseArtifact(inputPath);
 const tarball = artifact.tarballPath;
-const rootPackage = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const rootPackage = JSON.parse(
+  await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+);
 const sdkMetricsVersion = rootPackage.devDependencies?.["@opentelemetry/sdk-metrics"];
 if (!/^\d+\.\d+\.\d+$/.test(sdkMetricsVersion ?? "")) {
   throw new Error("Expected an exact development-only @opentelemetry/sdk-metrics version.");

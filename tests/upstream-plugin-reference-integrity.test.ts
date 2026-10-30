@@ -6,7 +6,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   UPSTREAM_PLUGIN_REFERENCE_ROOT,
   UPSTREAM_PLUGIN_SPECS,
-} from "../scripts/lib/upstream-plugin-specs.mjs";
+} from "../.github/scripts/lib/upstream-plugin-specs.mjs";
 
 async function readSnapshotText(rootPath: string): Promise<string> {
   const contents: string[] = [];

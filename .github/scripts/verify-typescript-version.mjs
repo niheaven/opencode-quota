@@ -14,7 +14,7 @@ const BUN_FFI_STRUCTS_VERSION = "0.3.1";
 const BUN_FFI_TYPESCRIPT_PEER = "^5";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(scriptDir, "../..");
 
 const packageJson = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
 const lockfile = parse(await readFile(path.join(repoRoot, "pnpm-lock.yaml"), "utf8"));

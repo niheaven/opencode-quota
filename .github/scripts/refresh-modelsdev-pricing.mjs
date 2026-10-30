@@ -168,7 +168,9 @@ export function buildRefreshedSnapshot(api, previous, providerIDs) {
 
 async function main() {
   const providerIDs = parseProviderArgs(process.argv.slice(2));
-  const outPath = fileURLToPath(new URL("../src/data/modelsdev-pricing.min.json", import.meta.url));
+  const outPath = fileURLToPath(
+    new URL("../../src/data/modelsdev-pricing.min.json", import.meta.url),
+  );
   const previous = await readPreviousSnapshot(outPath);
   const api = await fetchModelsDevJson();
   const { snapshot, keptModelIDs } = buildRefreshedSnapshot(api, previous, providerIDs);

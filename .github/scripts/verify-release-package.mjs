@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(scriptDir, "../..");
 const artifactDir = await mkdtemp(path.join(tmpdir(), "opencode-quota-release-package-"));
 
 function run(script, args = []) {
@@ -20,8 +20,8 @@ function run(script, args = []) {
 }
 
 try {
-  run("scripts/pack-release-package.mjs", [artifactDir]);
-  run("scripts/smoke-packed-package.mjs", [artifactDir]);
+  run(".github/scripts/pack-release-package.mjs", [artifactDir]);
+  run(".github/scripts/smoke-packed-package.mjs", [artifactDir]);
 } finally {
   await rm(artifactDir, { recursive: true, force: true });
 }

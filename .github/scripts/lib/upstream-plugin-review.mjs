@@ -12,10 +12,11 @@ export function groupReferenceChangesByPlugin(paths) {
 
   for (const relativePath of [...paths].sort((left, right) => left.localeCompare(right))) {
     const parts = relativePath.split("/");
-    if (parts.length < 4) continue;
-    if (parts[0] !== "scripts" || parts[1] !== "upstream-plugins") continue;
+    if (parts.length < 5) continue;
+    if (parts[0] !== ".github" || parts[1] !== "scripts" || parts[2] !== "upstream-plugins")
+      continue;
 
-    const pluginId = parts[2];
+    const pluginId = parts[3];
     if (!grouped.has(pluginId)) grouped.set(pluginId, []);
     grouped.get(pluginId).push(relativePath);
   }

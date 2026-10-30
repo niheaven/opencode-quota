@@ -9,7 +9,7 @@ import {
   shouldOmitFullDiffPreview,
   shouldPrepareUpstreamPluginReview,
   trimDiffPreview,
-} from "../scripts/lib/upstream-plugin-review.mjs";
+} from "../.github/scripts/lib/upstream-plugin-review.mjs";
 
 describe("upstream-plugin-review", () => {
   it("builds changed plugin summaries from lock versions", () => {
@@ -50,7 +50,7 @@ describe("upstream-plugin-review", () => {
       version: "0.4.3",
       packageName: "@old-scope/cursor-opencode-provider",
       repo: "old-owner/cursor-opencode-provider",
-      referenceDir: "scripts/upstream-plugins/cursor-opencode-provider",
+      referenceDir: ".github/scripts/upstream-plugins/cursor-opencode-provider",
       npmUrl: "https://www.npmjs.com/package/%40old-scope/cursor-opencode-provider/v/0.4.3",
       publishedAt: "2026-04-08T14:04:58.057Z",
     };
@@ -92,7 +92,7 @@ describe("upstream-plugin-review", () => {
         new Map([
           [
             "cursor-opencode-provider",
-            ["scripts/upstream-plugins/cursor-opencode-provider/package.json"],
+            [".github/scripts/upstream-plugins/cursor-opencode-provider/package.json"],
           ],
         ]),
         [],
@@ -128,7 +128,7 @@ describe("upstream-plugin-review", () => {
         [],
         [
           {
-            path: "scripts/upstream-plugins/lock.json",
+            path: ".github/scripts/upstream-plugins/lock.json",
             status: " M",
           },
         ],
@@ -139,27 +139,29 @@ describe("upstream-plugin-review", () => {
 
   it("groups changed reference files by plugin", () => {
     const grouped = groupReferenceChangesByPlugin([
-      "scripts/upstream-plugins/opencode-gemini-auth/package.json",
-      "scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
-      "scripts/upstream-plugins/opencode-agy-auth/dist/index.js",
-      "scripts/upstream-plugins/lock.json",
+      ".github/scripts/upstream-plugins/opencode-gemini-auth/package.json",
+      ".github/scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
+      ".github/scripts/upstream-plugins/opencode-agy-auth/dist/index.js",
+      ".github/scripts/upstream-plugins/lock.json",
     ]);
 
     expect(grouped.get("opencode-gemini-auth")).toEqual([
-      "scripts/upstream-plugins/opencode-gemini-auth/package.json",
-      "scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
+      ".github/scripts/upstream-plugins/opencode-gemini-auth/package.json",
+      ".github/scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
     ]);
     expect(grouped.get("opencode-agy-auth")).toEqual([
-      "scripts/upstream-plugins/opencode-agy-auth/dist/index.js",
+      ".github/scripts/upstream-plugins/opencode-agy-auth/dist/index.js",
     ]);
   });
 
   it("omits generated source map previews", () => {
     expect(
-      shouldOmitFullDiffPreview("scripts/upstream-plugins/opencode-agy-auth/dist/index.js.map"),
+      shouldOmitFullDiffPreview(
+        ".github/scripts/upstream-plugins/opencode-agy-auth/dist/index.js.map",
+      ),
     ).toBe(true);
     expect(
-      shouldOmitFullDiffPreview("scripts/upstream-plugins/opencode-agy-auth/dist/index.js"),
+      shouldOmitFullDiffPreview(".github/scripts/upstream-plugins/opencode-agy-auth/dist/index.js"),
     ).toBe(false);
     expect(getOmittedDiffPreview()).toContain("generated source map diff omitted");
   });
@@ -173,9 +175,9 @@ describe("upstream-plugin-review", () => {
 
   it("prioritizes readable previews over generated source maps", () => {
     const pluginId = "opencode-agy-auth";
-    const readablePath = `scripts/upstream-plugins/${pluginId}/package.json`;
+    const readablePath = `.github/scripts/upstream-plugins/${pluginId}/package.json`;
     const sourceMapPaths = ["a.js.map", "b.js.map", "c.js.map", "d.js.map"].map(
-      (fileName) => `scripts/upstream-plugins/${pluginId}/dist/${fileName}`,
+      (fileName) => `.github/scripts/upstream-plugins/${pluginId}/dist/${fileName}`,
     );
     const prompt = buildUpstreamPluginReviewPrompt({
       changedFilesByPlugin: new Map([[pluginId, [...sourceMapPaths, readablePath]]]),
@@ -208,8 +210,8 @@ describe("upstream-plugin-review", () => {
         [
           "opencode-gemini-auth",
           [
-            "scripts/upstream-plugins/opencode-gemini-auth/package.json",
-            "scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
+            ".github/scripts/upstream-plugins/opencode-gemini-auth/package.json",
+            ".github/scripts/upstream-plugins/opencode-gemini-auth/src/index.ts",
           ],
         ],
       ]),
@@ -224,8 +226,8 @@ describe("upstream-plugin-review", () => {
       ],
       diffPreviewByPath: new Map([
         [
-          "scripts/upstream-plugins/opencode-gemini-auth/package.json",
-          '--- a/scripts/upstream-plugins/opencode-gemini-auth/package.json\n+++ b/scripts/upstream-plugins/opencode-gemini-auth/package.json\n@@\n-  "version": "1.2.0"\n+  "version": "1.3.0"',
+          ".github/scripts/upstream-plugins/opencode-gemini-auth/package.json",
+          '--- a/.github/scripts/upstream-plugins/opencode-gemini-auth/package.json\n+++ b/.github/scripts/upstream-plugins/opencode-gemini-auth/package.json\n@@\n-  "version": "1.2.0"\n+  "version": "1.3.0"',
         ],
       ]),
       testResult: {
@@ -266,7 +268,7 @@ describe("upstream-plugin-review", () => {
         },
       }),
     ).toContain("cursor-opencode-provider: metadata changed at 0.4.3 (packageName, repo)");
-    expect(prompt).toContain("scripts/upstream-plugins/opencode-gemini-auth/package.json");
+    expect(prompt).toContain(".github/scripts/upstream-plugins/opencode-gemini-auth/package.json");
     expect(prompt).toContain('"version": "1.3.0"');
     expect(prompt).toContain("`pnpm test`: passed");
     expect(prompt).toContain("`pnpm run typecheck`: failed");

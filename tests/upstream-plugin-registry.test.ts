@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { normalizeLatestPublishedPluginVersion } from "../scripts/lib/upstream-plugin-registry.mjs";
-import { getUpstreamPluginSpec } from "../scripts/lib/upstream-plugin-specs.mjs";
+import { normalizeLatestPublishedPluginVersion } from "../.github/scripts/lib/upstream-plugin-registry.mjs";
+import { getUpstreamPluginSpec } from "../.github/scripts/lib/upstream-plugin-specs.mjs";
 
 describe("upstream-plugin-registry", () => {
   it("builds canonical npm metadata for the Cursor package", () => {

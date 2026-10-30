@@ -261,7 +261,9 @@ describe("GitHub workflows", () => {
       issues: "write",
     });
     expect(setupNode?.with?.["node-version"]).toBe(22);
-    expect(reconcile?.run).toBe("node scripts/check-upstream-plugin-updates.mjs --write-issues");
+    expect(reconcile?.run).toBe(
+      "node .github/scripts/check-upstream-plugin-updates.mjs --write-issues",
+    );
 
     const workflowFiles = (await readdir(".github/workflows")).filter((file) =>
       /\.ya?ml$/u.test(file),

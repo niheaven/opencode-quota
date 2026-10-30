@@ -8,7 +8,7 @@ import babel from "@babel/core";
 import typescriptPreset from "@babel/preset-typescript";
 import solidPreset from "babel-preset-solid";
 
-const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const srcDir = path.join(rootDir, "src");
 const distDir = path.join(rootDir, "dist");
 

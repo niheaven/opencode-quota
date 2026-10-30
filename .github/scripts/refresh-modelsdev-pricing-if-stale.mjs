@@ -25,7 +25,7 @@ export function shouldAutoRefresh(meta, nowMs, maxAgeMs = DEFAULT_MAX_AGE_MS) {
 }
 
 async function readSnapshotMeta() {
-  const snapshotUrl = new URL("../src/data/modelsdev-pricing.min.json", import.meta.url);
+  const snapshotUrl = new URL("../../src/data/modelsdev-pricing.min.json", import.meta.url);
   const raw = await readFile(snapshotUrl, "utf8");
   const parsed = JSON.parse(raw);
   const meta = parsed?._meta;

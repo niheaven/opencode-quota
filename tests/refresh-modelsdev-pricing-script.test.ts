@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildRefreshedSnapshot,
   keepRetiredModels,
-} from "../scripts/refresh-modelsdev-pricing.mjs";
+} from "../.github/scripts/refresh-modelsdev-pricing.mjs";
 
 function snapshot(providers: Record<string, Record<string, { input: number; output: number }>>) {
   return {
