@@ -110,7 +110,7 @@ Run `/quota_status` first. Every known provider has a section named after its id
 | Symptom                 | Fix |
 | ----------------------- | --- |
 | CLI not detected        | Install `bailian-cli` so `bl` is in an absolute folder on the [service `PATH`](#service-environment), outside the project folder. A native `bl` runs directly and npm's `bl.cmd` shim is run with the `node` on that `PATH`. See [setup](providers.md#alibaba-coding-plan). |
-| Console session missing | The Coding Plan is read through the console session: run `bl auth login --console`. Without a browser, mint the token from an API Key (AK/SK): `bl auth generate-access-token --access-key-id <id> --access-key-secret <secret>`, then pipe it into `bl auth login --console --token-stdin --console-region <region>`. |
+| Console session missing | The Coding Plan is read through the console session: run `bl auth login --console`. An API Key (AK/SK) signs in too: `bl auth login --open-api --access-key-id <id> --access-key-secret <secret>`. |
 | No rows and no error    | The account has no Coding Plan subscription: the CLI prints `{}`, and OpenCode Quota then shows no rows, which is not a failure. |
 | One window is missing   | The console reported no quota for that window: the plan does not cover it, or its limit is 0, so it has no row. Check it in the Bailian Coding Plan console. |
 | Provider not detected   | Make sure the requests use OpenCode's `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `alibaba`, or `alibaba-cn` provider. |

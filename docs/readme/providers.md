@@ -401,7 +401,7 @@ npm install -g bailian-cli
 bl auth login --console
 ```
 
-- It runs `bl usage coding-plan --output json`, which needs the console token. An API Key (AK/SK) can mint one instead of the browser login: `bl auth generate-access-token --access-key-id <id> --access-key-secret <secret>`, then `bl auth login --console --token-stdin --console-region <region>` saves it.
+- It runs `bl usage coding-plan --output json`, which needs the console token. An API Key (AK/SK) signs in to the console too: `bl auth login --open-api --access-key-id <id> --access-key-secret <secret>` mints a CLI access token from it, validates it and saves both.
 - It reports three request windows: `5h`, `Weekly` and `Monthly`, keyed `five_hour`, `weekly` and `monthly`. The quota is **requests**, so a row shows the percent left, the requests used, the limit and the reset time.
 - A window the console reports no quota for has no row: the plan does not cover it, or its limit is 0.
 - An account without a Coding Plan subscription prints `{}`: no rows and no error.
